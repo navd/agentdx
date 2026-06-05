@@ -1,0 +1,87 @@
+name: Update Homebrew Formula
+
+# Manual-only for now (Homebrew tap not set up yet). Run from the Actions tab
+# when ready. NOTE before enabling auto-run: the tarball URL below must use the
+# scoped path (@agentdx/agentdx), and HOMEBREW_TAP_TOKEN + the navd/
+# homebrew-tap repo must exist.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-homebrew:
+    name: Push formula to Homebrew tap
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v4
+
+      - name: Extract release metadata
+        id: meta
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TARBALL_URL="https://registry.npmjs.org/agentdx/-/agentdx-${VERSION}.tgz"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tarball_url=${TARBALL_URL}" >> "$GITHUB_OUTPUT"
+
+          echo "Waiting for npm tarball to be available..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARBALL_URL")
+            if [ "$STATUS" = "200" ]; then
+              echo "Tarball available."
+              break
+            fi
+            echo "Attempt $i: HTTP $STATUS — retrying in 10s..."
+            sleep 10
+          done
+
+          SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | awk '{print $1}')
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+
+          echo "Version: ${VERSION}"
+          echo "Tarball: ${TARBALL_URL}"
+          echo "SHA256:  ${SHA256}"
+
+      - name: Generate updated formula
+        run: |
+          cat > /tmp/agentdx.rb <<'FORMULA'
+          class Agentdx < Formula
+            desc "Local-first tool to see what your AI coding agents are actually doing"
+            homepage "https://www.npmjs.com/package/@agentdx/agentdx"
+            url "${{ steps.meta.outputs.tarball_url }}"
+            version "${{ steps.meta.outputs.version }}"
+            sha256 "${{ steps.meta.outputs.sha256 }}"
+            license "MIT"
+
+            depends_on "node" => ">= 18"
+
+            def install
+              system "npm", "install", *std_npm_args
+              bin.install_symlink Dir["#{libexec}/bin/*"]
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/agentdx --version")
+            end
+          end
+          FORMULA
+
+          # Remove leading whitespace from heredoc indentation
+          sed -i 's/^          //' /tmp/agentdx.rb
+
+      - name: Push formula to homebrew-tap repo
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        with:
+          source_file: /tmp/agentdx.rb
+          destination_repo: navd/homebrew-tap
+          destination_folder: Formula
+          destination_branch: main
+          user_email: "agentdx-bot@users.noreply.github.com"
+          user_name: "agentdx-bot"
+          commit_message: "Update agentdx to ${{ steps.meta.outputs.version }}"
