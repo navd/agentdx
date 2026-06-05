@@ -1,0 +1,11 @@
+tests/
+screenshots/
+test-results/
+.github/
+infra/
+data/
+*.spec.ts
+playwright.config.ts
+LOGBOOK.md
+TODO.md
+.next/

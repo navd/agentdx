@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+web/.next/
+
+# Database files
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Environment variables
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build output
+dist/
+out/
+
+# Test artifacts
+coverage/
+test-results/
+screenshots/
+!docs/screenshots/
+!docs/screenshots/*.png
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# TypeScript incremental compilation
+*.tsbuildinfo
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+infra/terraform/terraform.tfstate*
+infra/terraform/terraform.tfvars
+infra/terraform/.build/
+*.tfplan
+
+# AWS credentials (NEVER commit)
+*.pem
+credentials
+.aws/
+
+# scratch screenshot output (not committed)
+web/shots/
+web/shots-dark/

@@ -1,0 +1,73 @@
+{
+  "name": "@agentdx/agentdx",
+  "version": "0.3.11",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "A local-first tool that shows you the real picture of your AI coding agents — tokens, tools, models, and errors across Claude Code, Codex, Cursor, Antigravity, VS Code (Copilot), and Continue.dev. 100% local: no accounts, no telemetry.",
+  "author": "navd",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navd/agentdx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/navd/agentdx/issues"
+  },
+  "homepage": "https://github.com/navd/agentdx#readme",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "claude",
+    "codex",
+    "cursor",
+    "antigravity",
+    "continue",
+    "copilot",
+    "analytics",
+    "developer-tools",
+    "local-first",
+    "privacy"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "src/",
+    "docs/screenshots/",
+    "web/src/",
+    "web/package.json",
+    "web/next.config.*",
+    "web/tsconfig.json",
+    "web/postcss.config.*"
+  ],
+  "type": "module",
+  "bin": {
+    "agentdx": "./bin/agentdx.mjs"
+  },
+  "scripts": {
+    "prebuild": "tsc && cp src/core/schema.sql dist/src/core/schema.sql",
+    "build": "tsc && cp src/core/schema.sql dist/src/core/schema.sql && cd web && npm run build",
+    "prepublishOnly": "tsc && cp src/core/schema.sql dist/src/core/schema.sql",
+    "postinstall": "node bin/postinstall.mjs",
+    "collect": "node --loader ts-node/esm src/collector/index.ts",
+    "serve": "cd web && npm run dev",
+    "dev": "node bin/agentdx.mjs",
+    "start": "node bin/agentdx.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.15.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.22.3",
+    "typescript": "^5.7.3"
+  }
+}
