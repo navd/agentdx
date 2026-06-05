@@ -88,21 +88,58 @@ function resolveWebDir() {
 }
 
 /** Start the Next.js dashboard. Returns the child process. */
-function startDashboard(webDir, port, dbPath, chalk) {
+/** Spawn `next dev` on `port`. Resolves once we know the outcome from Next's
+ *  output: 'ready' (it bound and is serving) or 'inuse' (EADDRINUSE — the
+ *  free-port probe lost a race, so the caller should try the next port). */
+function trySpawnDashboard(webDir, port, dbPath) {
+  // shell:true so Windows resolves `npx` → `npx.cmd`. Pipe stdout/stderr so we
+  // can detect the real bind result instead of optimistically declaring "ready".
+  const child = spawn('npx', ['next', 'dev', '-p', String(port)], {
+    cwd: webDir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
+    env: { ...process.env, AGENTDX_DB: dbPath, AGENTDX_VERSION: VERSION },
+  });
+  const outcome = new Promise((resolve) => {
+    let settled = false;
+    const done = (status) => { if (!settled) { settled = true; resolve(status); } };
+    const onData = (buf) => {
+      const s = buf.toString();
+      if (/EADDRINUSE|address already in use/i.test(s)) done('inuse');
+      // Next prints "Local: http://localhost:PORT" / "Ready in …" once bound.
+      else if (/(- Local:|Ready in|started server)/i.test(s)) done('ready');
+    };
+    child.stdout.on('data', onData);
+    child.stderr.on('data', onData);
+    child.once('exit', () => done('inuse')); // exited before binding → treat as unusable
+  });
+  return { child, outcome };
+}
+
+async function startDashboard(webDir, port, dbPath, chalk, requestedPort) {
   if (!existsSync(join(webDir, 'node_modules'))) {
     console.log(chalk.dim('  Installing dashboard dependencies (first run only)…'));
     execSync('npm install', { cwd: webDir, stdio: 'inherit' });
   }
-  // shell:true so Windows resolves `npx` → `npx.cmd` (plain spawn can't exec
-  // a .cmd shim and dies with ENOENT). Harmless on macOS/Linux.
-  // stdio: swallow Next's stdout (the "Compiled / GET 200 / Next.js banner"
-  // noise that clutters our clean CLI), keep stderr so real errors surface.
-  return spawn('npx', ['next', 'dev', '-p', String(port)], {
-    cwd: webDir,
-    stdio: ['ignore', 'ignore', 'inherit'],
-    shell: process.platform === 'win32',
-    env: { ...process.env, AGENTDX_DB: dbPath, AGENTDX_VERSION: VERSION },
-  });
+  const p = paint(chalk);
+  // The free-port probe can race (something grabs the port between the probe
+  // closing and Next binding), so retry the actual spawn across ports too.
+  for (let tryPort = port; tryPort < port + 12; tryPort++) {
+    const { child, outcome } = trySpawnDashboard(webDir, tryPort, dbPath);
+    const status = await outcome;
+    if (status === 'ready') {
+      if (String(tryPort) !== String(requestedPort)) {
+        console.log('  ' + p.yellow(`port ${requestedPort} busy → using ${tryPort}`));
+      }
+      printDashboardBox(chalk, tryPort);
+      // From here on, only surface real errors (Next's compile noise stays hidden).
+      child.stderr.on('data', (d) => process.stderr.write(d));
+      return child;
+    }
+    child.kill();
+  }
+  console.log(p.red(`\n  ✗ No free port in ${requestedPort}–${parseInt(requestedPort, 10) + 11}. Close something or pass --port.\n`));
+  process.exit(1);
 }
 
 // ── Port handling ────────────────────────────────────────────────
@@ -371,16 +408,10 @@ async function launchDashboard(requestedPort, dbPath, chalk) {
     console.log(p.yellow('  Web app not initialized. Run from the agentdx root.'));
     process.exit(1);
   }
-  const port = await findFreePort(requestedPort, 12);
-  if (port == null) {
-    console.log(p.red(`\n  ✗ No free port in ${requestedPort}–${parseInt(requestedPort, 10) + 11}. Close something or pass --port.\n`));
-    process.exit(1);
-  }
-  if (String(port) !== String(requestedPort)) {
-    console.log('  ' + p.yellow(`port ${requestedPort} busy → using ${port}`));
-  }
-  printDashboardBox(chalk, port);
-  return startDashboard(webDir, port, dbPath, chalk);
+  // Best-guess starting port; startDashboard retries from here on the actual
+  // bind (the probe can race), and prints the "ready" box only once Next binds.
+  const port = (await findFreePort(requestedPort, 12)) || parseInt(requestedPort, 10) || 3002;
+  return startDashboard(webDir, port, dbPath, chalk, requestedPort);
 }
 
 const program = new Command();
