@@ -12,6 +12,7 @@ const NAV = [
   { id: 'agents', label: 'Agents & Skills', href: '/agents', icon: 'agents' },
   { id: 'models', label: 'Models & Tokens', href: '/models', icon: 'chip' },
   { id: 'repos', label: 'Repositories & PRs', href: '/repositories', icon: 'repo' },
+  { id: 'oversight', label: 'Authorship & Oversight', href: '/oversight', icon: 'shield' },
   { id: 'risk', label: 'Risk & Policy', href: '/risk', icon: 'alert' },
   { id: 'remote', label: 'Remote Control', href: '/remote-control', icon: 'remote' },
   { id: 'reports', label: 'Reports', href: '/reports', icon: 'report' },

@@ -138,6 +138,53 @@ CREATE TABLE IF NOT EXISTS subagents (
 CREATE INDEX IF NOT EXISTS idx_subagents_parent ON subagents(parent_session_id);
 CREATE INDEX IF NOT EXISTS idx_subagents_kind ON subagents(kind);
 
+-- Git ground truth for the Authorship & Oversight view. Populated by the git
+-- collector from `git log` / `git blame` on each local repo AgentDX has
+-- session history for. Line counts here are EXACT (from git); the ai/human
+-- attribution is a HEURISTIC (commit↔session correlation + co-author trailers)
+-- and always carries a confidence — never present it as ground-truth authorship.
+CREATE TABLE IF NOT EXISTS git_commits (
+    sha             TEXT PRIMARY KEY,
+    repo_path       TEXT NOT NULL,
+    author_name     TEXT,
+    author_email    TEXT,
+    committed_at    INTEGER,
+    lines_added     INTEGER DEFAULT 0,
+    lines_removed   INTEGER DEFAULT 0,
+    files_changed   INTEGER DEFAULT 0,
+    coauthors       TEXT,                       -- raw Co-authored-by trailer values
+    attribution     TEXT,                       -- ai | human | mixed | unknown
+    confidence      REAL DEFAULT 0,             -- 0..1 for the attribution label
+    session_id      TEXT,                       -- linked AI session when correlated
+    collected_at    INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_git_commits_repo ON git_commits(repo_path, committed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_git_commits_attr ON git_commits(attribution);
+
+-- Per-file authorship rollup from `git blame` (surviving lines = "stock").
+-- ai/human/mixed lines come from each surviving line's introducing commit's
+-- attribution. fan_in = how many other tracked files reference this one
+-- (heuristic import graph); -1 means centrality was not computed for the repo.
+CREATE TABLE IF NOT EXISTS git_file_authorship (
+    repo_path            TEXT NOT NULL,
+    file_path            TEXT NOT NULL,
+    ai_lines             INTEGER DEFAULT 0,
+    human_lines          INTEGER DEFAULT 0,
+    mixed_lines          INTEGER DEFAULT 0,
+    unknown_lines        INTEGER DEFAULT 0,
+    total_lines          INTEGER DEFAULT 0,
+    fan_in               INTEGER DEFAULT -1,
+    risk_flags           TEXT,                  -- comma list: auth,secret,infra,migration,payment,deploy,config
+    last_ai_commit_at    INTEGER,
+    last_human_commit_at INTEGER,
+    head_sha             TEXT,
+    computed_at          INTEGER NOT NULL,
+    PRIMARY KEY (repo_path, file_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_git_authorship_repo ON git_file_authorship(repo_path);
+
 CREATE TABLE IF NOT EXISTS repositories (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     path            TEXT UNIQUE NOT NULL,

@@ -11,10 +11,26 @@ import { Monitor, Camera, Terminal } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-function getSessionsData() {
+function getSessionsData(file?: string, project?: string) {
   const db = getDb();
 
-  const sessions = db.prepare(`
+  // When drilling in from a file (e.g. the Oversight treemap), restrict to the
+  // sessions that actually touched that file, via file_events. Match the exact
+  // absolute path, or its trailing path tail (covers repo-root vs sub-dir
+  // normalization differences between collectors). If no session touched it
+  // (committed by hand / in an uncollected session), fall back to the repo.
+  let fileSessionIds: string[] | null = null;
+  let drillMode: 'file' | 'repo' | 'none' = 'none';
+  if (file) {
+    const tail = '%' + file.split('/').slice(-3).join('/');
+    const rows = db.prepare(
+      `SELECT DISTINCT session_id FROM file_events WHERE file_path = @file OR file_path LIKE @tail`,
+    ).all({ file, tail }) as { session_id: string }[];
+    fileSessionIds = rows.map((r) => r.session_id);
+    drillMode = fileSessionIds.length ? 'file' : project ? 'repo' : 'none';
+  }
+
+  const all = db.prepare(`
     SELECT s.id, s.title, s.agent, s.agent_version, s.model_primary, s.status,
       s.total_input_tokens, s.total_output_tokens, s.total_cache_read,
       s.duration_ms, s.tool_call_count, s.turn_count, s.started_at,
@@ -24,6 +40,10 @@ function getSessionsData() {
     LEFT JOIN (SELECT session_id, COUNT(*) as error_count FROM tool_calls WHERE is_error = 1 GROUP BY session_id) err ON err.session_id = s.id
     ORDER BY s.started_at DESC
   `).all() as any[];
+  const sessions =
+    drillMode === 'file' ? all.filter((s) => fileSessionIds!.includes(s.id))
+    : drillMode === 'repo' ? all.filter((s) => (s.project_path || '').split('/').pop() === project)
+    : all;
 
   const totals = db.prepare(`
     SELECT
@@ -46,6 +66,7 @@ function getSessionsData() {
 
   return {
     sessions,
+    drillMode,
     totals,
     modelCount,
     agents: agents.map(a => a.agent),
@@ -54,10 +75,11 @@ function getSessionsData() {
   };
 }
 
-export default async function SessionsPage({ searchParams }: { searchParams: Promise<{ agent?: string; model?: string; project?: string; date?: string }> }) {
+export default async function SessionsPage({ searchParams }: { searchParams: Promise<{ agent?: string; model?: string; project?: string; date?: string; file?: string }> }) {
   const params = await searchParams;
-  const { sessions, totals, modelCount, agents, models, projects } = getSessionsData();
+  const { sessions, drillMode, totals, modelCount, agents, models, projects } = getSessionsData(params.file, params.project);
   const remote = getRemoteControlData();
+  const fileName = params.file ? params.file.split('/').pop() : null;
 
   // Session-size histogram: sessions bucketed by token magnitude, stacked
   // clean vs has-errors. Shows the true shape (most sessions tiny; errors
@@ -84,7 +106,7 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   const histHasData = histogram.some((b) => b.clean + b.errors > 0);
   const errorSessionCount = histogram.reduce((a, b) => a + b.errors, 0);
 
-  if (sessions.length === 0) {
+  if (sessions.length === 0 && !params.file) {
     return (
       <div className="page page-wide">
         <div className="page-head">
@@ -111,6 +133,19 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
           <p className="page-sub">{fmtNum(totals.cnt)} coding-agent sessions captured</p>
         </div>
       </div>
+
+      {fileName && (
+        <div className="card card-pad mb-20 row between" style={{ alignItems: 'center' }}>
+          <div className="f13">
+            {drillMode === 'file'
+              ? <>Showing <b>{sessions.length}</b> session{sessions.length === 1 ? '' : 's'} that touched <span className="mono fw6">{fileName}</span>.</>
+              : drillMode === 'repo'
+              ? <>No captured session directly edited <span className="mono fw6">{fileName}</span> (committed by hand or in an uncollected session). Showing <b>{sessions.length}</b> session{sessions.length === 1 ? '' : 's'} in <span className="mono fw6">{params.project}</span> instead.</>
+              : <>No captured session touched <span className="mono fw6">{fileName}</span>.</>}
+          </div>
+          <Link href="/sessions" className="btn btn-sm">Clear filter ✕</Link>
+        </div>
+      )}
 
       {/* summary strip */}
       <div className="grid g-4 mb-20">

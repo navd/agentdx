@@ -11,6 +11,7 @@ import { collectVSCode } from './vscode.js';
 import { collectContinue } from './continue.js';
 import { backfillSkills, healStaleSessions, recomputeRepositories, recomputeSessionToolCounts } from './shared.js';
 import { backfillFileEvents } from './file-events.js';
+import { collectGit } from './git.js';
 
 interface CollectorResult {
   source: string;
@@ -170,6 +171,15 @@ export async function runCollection(overrides: { claudeDir?: string; codexDir?: 
     recomputeRepositories(db);
   } catch {
     // repo rollup is best-effort
+  }
+
+  // Git ground truth for the Authorship & Oversight view. Runs after
+  // file_events are backfilled (commit↔session overlap depends on them).
+  // Incremental per repo (keyed off HEAD sha); best-effort.
+  try {
+    collectGit(db);
+  } catch {
+    // git collection is best-effort — never block a collect over it
   }
 
   // Attach per-agent DB totals so the CLI summary reflects everything captured,
