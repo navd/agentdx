@@ -271,12 +271,14 @@ export default function RiskPage() {
           former Risk strip, Policy DrilldownTiles, and Error breakdown card). */}
       <div className="grid mb-20" style={{ gridTemplateColumns: '180px 1fr' }}>
         <ErrorBoundary fallbackTitle="Risk gauge failed to render">
-        <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', textAlign: 'center' }}>
+          <div className="card-title" style={{ marginBottom: 8 }}>Sessions with errors</div>
           <GaugeChart
             value={sessionsWithTools > 0 ? Math.round((sessionsWithErrors / sessionsWithTools) * 100) : 0}
-            label="sessions w/ ≥1 error"
+            label=""
             size={150}
           />
+          <div className="f12 muted" style={{ marginTop: 6 }}>of {fmtNum(sessionsWithTools)} tool-active sessions</div>
         </div>
         </ErrorBoundary>
         <div className="grid g-4" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

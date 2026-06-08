@@ -298,7 +298,10 @@ export default function AgentsPage() {
                               <span style={{
                                 display: 'inline-block', width: 22, height: 22, borderRadius: 4, lineHeight: '22px',
                                 fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-mono)',
-                                background: intensity > 0.5 ? 'var(--accent)' : intensity > 0.1 ? `color-mix(in srgb, var(--accent) ${Math.round(intensity * 100)}%, var(--surface-3))` : 'var(--accent-soft)',
+                                // Below the white-text break, keep the tint LIGHT (≤20% accent on
+                                // --surface) so the dark count stays readable; only the saturated
+                                // fill (>0.5) flips to white text. Mid-range dark-on-medium was 1.2:1.
+                                background: intensity > 0.5 ? 'var(--accent)' : `color-mix(in srgb, var(--accent) ${Math.round(Math.min(intensity, 0.5) * 40)}%, var(--surface))`,
                                 color: intensity > 0.5 ? '#fff' : 'var(--text)',
                               }}>
                                 {cnt > 999 ? Math.round(cnt / 1000) + 'K' : cnt}

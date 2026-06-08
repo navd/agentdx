@@ -81,7 +81,7 @@ export default function InsightsPage() {
                   <span className="mono f12" style={{ width: 92, textAlign: 'right', color: win ? 'var(--accent)' : 'var(--text-muted)', fontWeight: win ? 700 : 500 }}>{a.agent}</span>
                   <div style={{ flex: 1, background: 'var(--surface-3)', borderRadius: 6, height: 22, position: 'relative', overflow: 'hidden' }}>
                     <div style={{ width: `${Math.max(2, share)}%`, height: '100%', background: win ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 35%, var(--surface-3))', borderRadius: 6, transition: 'width .3s' }} />
-                    <span className="mono" style={{ position: 'absolute', right: 8, top: 0, lineHeight: '22px', fontSize: 11, fontWeight: 700, color: share > 60 ? '#fff' : 'var(--text)' }}>
+                    <span className="mono" style={{ position: 'absolute', right: 8, top: 0, lineHeight: '22px', fontSize: 11, fontWeight: 700, color: win && share > 55 ? '#fff' : 'var(--text)' }}>
                       {share.toFixed(0)}%
                     </span>
                   </div>
@@ -203,7 +203,10 @@ export default function InsightsPage() {
                 return (
                   <a key={m.model} href={m.href} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
                     <div className="row between mb-4">
-                      <span className="mono f12 fw6" style={{ color: m.color }}>{shortName}</span>
+                      <span className="row gap-6" style={{ alignItems: 'center' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: m.color, display: 'inline-block', flexShrink: 0 }} />
+                        <span className="mono f12 fw6" style={{ color: 'var(--text)' }}>{shortName}</span>
+                      </span>
                       <span className="mono f12 muted">in {fmtTok(m.input)} · out {fmtTok(m.output)}</span>
                     </div>
                     <div style={{ display: 'flex', height: 16, borderRadius: 5, overflow: 'hidden', background: 'var(--surface-3)' }}>

@@ -193,6 +193,14 @@ const LANG_COLORS: Record<string, string> = {
   Rust: '#DEA584', Go: '#00ADD8', Java: '#E76F00', Ruby: '#CC342D', Web: '#E34F26',
 };
 
+// Readable text on a colored chip: dark text on light fills (JS yellow was
+// white-on-yellow = 1.35:1), white on dark fills.
+function chipText(bg?: string): string {
+  if (!bg || !bg.startsWith('#')) return '#fff';
+  const r = parseInt(bg.slice(1, 3), 16), g = parseInt(bg.slice(3, 5), 16), b = parseInt(bg.slice(5, 7), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#1a1a1a' : '#fff';
+}
+
 export default function RepositoriesPage() {
   const {
     repos, totals, allSessions, activeAgents, agentsByRepo, langsByRepo, langCounts,
@@ -269,7 +277,7 @@ export default function RepositoriesPage() {
                       <span className="row gap-8">
                         <span className="mono fw6" style={{ fontSize: 13 }}>{r.name}</span>
                         {langs.slice(0, 3).map(lang => (
-                          <span key={lang} style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 600, background: LANG_COLORS[lang] || 'var(--text-muted)', color: '#fff' }}>{lang}</span>
+                          <span key={lang} style={{ display: 'inline-block', padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 600, background: LANG_COLORS[lang] || 'var(--text-muted)', color: chipText(LANG_COLORS[lang]) }}>{lang}</span>
                         ))}
                       </span>
                       <span className="mono f12 fw6">{fmtTok(r.total_tokens)}</span>
@@ -420,7 +428,7 @@ export default function RepositoriesPage() {
                       <td>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {langs.length > 0 ? langs.map(lang => (
-                            <span key={lang} style={{ display: 'inline-block', padding: '2px 7px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: LANG_COLORS[lang] || 'var(--text-muted)', color: '#fff' }}>{lang}</span>
+                            <span key={lang} style={{ display: 'inline-block', padding: '2px 7px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: LANG_COLORS[lang] || 'var(--text-muted)', color: chipText(LANG_COLORS[lang]) }}>{lang}</span>
                           )) : <span className="subtle">--</span>}
                         </div>
                       </td>

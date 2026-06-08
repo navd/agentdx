@@ -18,74 +18,54 @@ function squarify(items: TreemapItem[], x: number, y: number, w: number, h: numb
   if (items.length === 0) return [];
   if (items.length === 1) return [{ x, y, w, h, item: items[0] }];
 
-  const total = items.reduce((s, it) => s + it.value, 0);
-  if (total === 0) return [];
-
-  const sorted = [...items].sort((a, b) => b.value - a.value);
+  const sorted = [...items].filter((it) => it.value > 0).sort((a, b) => b.value - a.value);
+  if (sorted.length === 0) return [];
   const rects: Rect[] = [];
 
-  function layoutRow(row: TreemapItem[], rowTotal: number, rx: number, ry: number, rw: number, rh: number) {
-    const isHoriz = rw >= rh;
-    const mainSize = isHoriz ? (rowTotal / total) * rw : (rowTotal / total) * rh;
-
-    let offset = 0;
-    for (const item of row) {
-      const ratio = item.value / rowTotal;
-      const crossSize = isHoriz ? rh * ratio : rw * ratio;
-      if (isHoriz) {
-        rects.push({ x: rx, y: ry + offset, w: mainSize, h: crossSize, item });
-      } else {
-        rects.push({ x: rx + offset, y: ry, w: crossSize, h: mainSize, item });
-      }
-      offset += crossSize;
-    }
-
-    if (isHoriz) return { x: rx + mainSize, y: ry, w: rw - mainSize, h: rh };
-    return { x: rx, y: ry + mainSize, w: rw, h: rh - mainSize };
-  }
-
-  function worstRatio(row: TreemapItem[], rowTotal: number, sideLen: number): number {
-    const area = (rowTotal / total) * w * h;
-    let worst = 0;
-    for (const item of row) {
-      const itemArea = (item.value / total) * w * h;
-      const rowLen = area / sideLen;
-      const itemLen = itemArea / rowLen;
-      const ratio = Math.max(rowLen / itemLen, itemLen / rowLen);
-      worst = Math.max(worst, ratio);
-    }
-    return worst;
-  }
-
   let remaining = [...sorted];
+  // Sum of the items not yet laid out. Every row's main dimension is its share
+  // of THIS — not the original total — so each row fully fills the shrinking
+  // sub-rectangle and no dead space is left at the end.
+  let remTotal = remaining.reduce((s, it) => s + it.value, 0);
   let rx = x, ry = y, rw = w, rh = h;
+
+  // worst aspect ratio if `rowTotal` fills the short side of the current rect.
+  const worst = (rowTotal: number, maxItem: number, minItem: number, sideLen: number, rectArea: number) => {
+    const rowArea = (rowTotal / remTotal) * rectArea;
+    const maxArea = (maxItem / remTotal) * rectArea;
+    const minArea = (minItem / remTotal) * rectArea;
+    const s2 = sideLen * sideLen;
+    return Math.max((s2 * maxArea) / (rowArea * rowArea), (rowArea * rowArea) / (s2 * minArea));
+  };
 
   while (remaining.length > 0) {
     const sideLen = Math.min(rw, rh);
+    const rectArea = rw * rh;
     const row: TreemapItem[] = [remaining[0]];
     let rowTotal = remaining[0].value;
-    remaining = remaining.slice(1);
-
-    let currentWorst = worstRatio(row, rowTotal, sideLen);
-
-    while (remaining.length > 0) {
-      const next = remaining[0];
-      const newRow = [...row, next];
-      const newTotal = rowTotal + next.value;
-      const newWorst = worstRatio(newRow, newTotal, sideLen);
-
-      if (newWorst <= currentWorst) {
-        row.push(next);
-        rowTotal = newTotal;
-        currentWorst = newWorst;
-        remaining = remaining.slice(1);
-      } else {
-        break;
-      }
+    let rowMax = remaining[0].value, rowMin = remaining[0].value;
+    let i = 1;
+    while (i < remaining.length) {
+      const next = remaining[i];
+      const nMax = Math.max(rowMax, next.value), nMin = Math.min(rowMin, next.value);
+      if (worst(rowTotal + next.value, nMax, nMin, sideLen, rectArea) > worst(rowTotal, rowMax, rowMin, sideLen, rectArea)) break;
+      row.push(next); rowTotal += next.value; rowMax = nMax; rowMin = nMin; i++;
     }
+    remaining = remaining.slice(row.length);
 
-    const rem = layoutRow(row, rowTotal, rx, ry, rw, rh);
-    rx = rem.x; ry = rem.y; rw = rem.w; rh = rem.h;
+    // Lay the row along the short side; main dimension = row's share of what's left.
+    const isHoriz = rw >= rh;
+    const mainSize = (rowTotal / remTotal) * (isHoriz ? rw : rh);
+    let offset = 0;
+    for (const item of row) {
+      const crossSize = (item.value / rowTotal) * (isHoriz ? rh : rw);
+      if (isHoriz) rects.push({ x: rx, y: ry + offset, w: mainSize, h: crossSize, item });
+      else rects.push({ x: rx + offset, y: ry, w: crossSize, h: mainSize, item });
+      offset += crossSize;
+    }
+    if (isHoriz) { rx += mainSize; rw -= mainSize; }
+    else { ry += mainSize; rh -= mainSize; }
+    remTotal -= rowTotal;
   }
 
   return rects;

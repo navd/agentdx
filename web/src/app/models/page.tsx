@@ -54,6 +54,15 @@ function getModelsData() {
 
   const agentCount = db.prepare(`SELECT COUNT(DISTINCT agent) as c FROM sessions`).get() as any;
 
+  // Grand total straight from the sessions table — the SAME number every other
+  // page shows. model_usage only covers tokens attributable to a named model
+  // (some sessions have tokens but no model_usage row), so summing it
+  // undercounts the true total. Keep the headline consistent; surface the
+  // attributed share separately.
+  const grand = db.prepare(
+    `SELECT COALESCE(SUM(total_input_tokens + total_output_tokens + total_cache_read), 0) AS t FROM sessions`,
+  ).get() as any;
+
   const models = db.prepare(`
     SELECT
       model,
@@ -150,11 +159,11 @@ function getModelsData() {
   // column, so joining via session pooled multi-model sessions and credited
   // every model with the same (fabricated) tool stats.
 
-  return { totals, agentCount, models, providers, weeklyTokens, reliability };
+  return { totals, grandTotal: grand.t || 0, agentCount, models, providers, weeklyTokens, reliability };
 }
 
 export default function ModelsPage() {
-  const { totals, agentCount, models, providers, weeklyTokens, reliability } = getModelsData();
+  const { totals, grandTotal, agentCount, models, providers, weeklyTokens, reliability } = getModelsData();
 
   if (models.length === 0) {
     return (
@@ -254,8 +263,8 @@ export default function ModelsPage() {
         <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           <div className="card stat" style={{ padding: '14px 16px' }}>
             <div className="stat-label">Total tokens</div>
-            <div className="stat-value" style={{ fontSize: 24 }}>{fmtTok(totalTokens)}</div>
-            <div className="stat-foot">input + output + cache</div>
+            <div className="stat-value" style={{ fontSize: 24 }}>{fmtTok(grandTotal)}</div>
+            <div className="stat-foot">{grandTotal > totalTokens ? `${((totalTokens / grandTotal) * 100).toFixed(1)}% attributed to a model` : 'input + output + cache'}</div>
           </div>
           <div className="card stat" style={{ padding: '14px 16px' }}>
             <div className="stat-label">Cache hit rate</div>

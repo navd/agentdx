@@ -74,7 +74,7 @@ export function SeverityFilter({ findings }: { findings: FindingRow[] }) {
                     {f.tool_name} failure
                     {f.count && f.count > 1 && <span className="badge badge-neutral" style={{ fontSize: 10 }}>×{f.count}</span>}
                   </div>
-                  <div className="f12 muted" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.preview}</div>
+                  <div className="f12 muted" title={f.preview} style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.preview}</div>
                 </td>
                 <td><span className="badge-outline">{f.category}</span></td>
                 <td>
