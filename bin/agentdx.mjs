@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { execSync, spawn, spawnSync } from 'child_process';
 import { join, dirname, relative, sep } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, writeFileSync, readFileSync, cpSync, mkdirSync, watch } from 'fs';
+import { existsSync, writeFileSync, readFileSync, cpSync, mkdirSync, watch, rmSync } from 'fs';
 import { homedir } from 'os';
 import { createServer } from 'net';
 import readline from 'readline';
@@ -366,6 +366,22 @@ function ask(q) {
   return new Promise((r) => rl.question(q, (a) => { rl.close(); r(a); }));
 }
 
+/**
+ * Evict npx's package cache (`$npm_cache/_npx`). Without this, a bare
+ * `npx @agentdx/agentdx` keeps re-running the stale cached copy after a global
+ * update — npx never re-checks the registry when a cached version satisfies the
+ * (empty) range, so the "update available" prompt loops forever. Best-effort.
+ */
+function clearNpxCache() {
+  try {
+    const cache = execSync('npm config get cache', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim();
+    if (cache && existsSync(join(cache, '_npx'))) {
+      rmSync(join(cache, '_npx'), { recursive: true, force: true });
+    }
+  } catch { /* non-fatal — update still applied globally */ }
+}
+
 /** Check npm for a newer version; offer to update before launching. Fail-safe. */
 async function maybePromptUpdate(chalk) {
   const p = paint(chalk);
@@ -381,6 +397,9 @@ async function maybePromptUpdate(chalk) {
     console.log();
     try {
       execSync(`npm i -g ${PKG}@latest`, { stdio: 'inherit' });
+      // Bust the npx cache so a future bare `npx @agentdx/agentdx` resolves the
+      // new version instead of replaying the stale cached copy (prompt loop).
+      clearNpxCache();
       console.log('\n  ' + p.green(`Updated to ${latest}.`) + p.dim(' Launching the new version…\n'));
       // Re-exec the NEW version with the same args, pinned to @latest so it
       // bypasses any stale npx cache (otherwise `npx agentdx` re-runs the cached
