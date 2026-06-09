@@ -6,7 +6,7 @@ import CommandPalette from '@/components/command-palette';
 
 export const metadata: Metadata = {
   title: 'AgentDX',
-  description: 'Coding-agent flight recorder and evidence console',
+  description: 'Your AI coding agents, summarized — tokens, tools, models, and errors, read locally.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -143,12 +143,46 @@ function getOverviewData(period: string) {
     WHERE tc.is_error = 1 ${andClause}
   `).get() as any;
 
+  // Active coding time: stitch every event (message + tool call) per session in
+  // time order and sum the gaps between consecutive events, but DROP any gap
+  // longer than the idle cap — those are breaks, not work. This measures real
+  // hands-on runtime, not wall-clock (ended_at − started_at), which would count
+  // a session left open overnight as a full day of "coding".
+  const IDLE_CAP_MS = 5 * 60 * 1000;
+  const activeTime = db.prepare(`
+    WITH ev AS (
+      SELECT m.session_id AS sid, m.timestamp AS ts
+      FROM messages m JOIN sessions s ON s.id = m.session_id WHERE 1=1 ${andClause}
+      UNION ALL
+      SELECT tc.session_id AS sid, tc.timestamp AS ts
+      FROM tool_calls tc JOIN sessions s ON s.id = tc.session_id WHERE 1=1 ${andClause}
+    ),
+    gaps AS (
+      SELECT sid, ts - LAG(ts) OVER (PARTITION BY sid ORDER BY ts) AS gap FROM ev
+    )
+    SELECT
+      COALESCE(SUM(CASE WHEN gap > 0 AND gap <= ${IDLE_CAP_MS} THEN gap ELSE 0 END), 0) AS active_ms,
+      COUNT(DISTINCT sid) AS sessions
+    FROM gaps
+  `).get() as any;
+
+  // AI lines edited: file_events are agent-driven edits/writes/creates, so every
+  // line here was touched by an AI. lines_added = written, lines_removed = deleted.
+  const aiLines = db.prepare(`
+    SELECT
+      COALESCE(SUM(fe.lines_added), 0) AS added,
+      COALESCE(SUM(fe.lines_removed), 0) AS removed,
+      COUNT(DISTINCT fe.session_id) AS sessions
+    FROM file_events fe JOIN sessions s ON s.id = fe.session_id
+    WHERE fe.op IN ('edit', 'write', 'create') ${andClause}
+  `).get() as any;
+
   return {
     totals, modelUsage, modelCount, agentStats, trendRows,
     agents: agents.map((a: any) => a.agent),
     dailySessions, dailySessionsSpark, dailyTokensSpark, dailyErrorsSpark,
     repos, recentSessions, errorTotals, lastCollection, repoCount,
-    ruleErrors,
+    ruleErrors, activeTime, aiLines,
   };
 }
 
@@ -160,6 +194,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     totals, modelUsage, modelCount, agentStats, trendRows, agents,
     dailySessions, dailySessionsSpark, dailyTokensSpark, dailyErrorsSpark,
     repos, recentSessions, errorTotals, lastCollection, repoCount, ruleErrors,
+    activeTime, aiLines,
   } = getOverviewData(period);
 
   const totalTokens = (totals.input_tokens || 0) + (totals.output_tokens || 0) + (totals.cache_read || 0);
@@ -189,8 +224,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       <div className="page page-wide">
         <div className="page-head">
           <div>
-            <h1 className="page-title">Coding-agent flight recorder</h1>
-            <p className="page-sub">Local evidence from commands, tokens, tools, and policy outcomes</p>
+            <h1 className="page-title">Your agents, summarized</h1>
+            <p className="page-sub">Tokens, tools, models, and errors from every coding agent — read locally, no telemetry</p>
           </div>
         </div>
         <EmptyState
@@ -207,8 +242,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     <div className="page page-wide">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Coding-agent flight recorder</h1>
-          <p className="page-sub">Local evidence from commands, tokens, tools, and policy outcomes</p>
+          <h1 className="page-title">Your agents, summarized</h1>
+          <p className="page-sub">Tokens, tools, models, and errors from every coding agent — read locally, no telemetry</p>
         </div>
         <div className="page-head-actions">
           <RefreshButton />
@@ -259,6 +294,32 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
           { label: 'Remote control', value: '—', detail: 'browser/shell audit', href: '/remote-control', icon: <Network size={18} />, tone: 'neutral' },
         ]} />
       </div>
+
+      {/* Effort: real hands-on time + code the AI actually wrote */}
+      <ErrorBoundary fallbackTitle="Effort metrics failed to render">
+      <div className="grid g-2 mb-20">
+        <Link href="/sessions" className="card stat" style={{ textDecoration: 'none' }}>
+          <div className="stat-label"><Activity size={13} /> Active coding time</div>
+          <div className="stat-value" style={{ fontSize: 28 }}>{fmtDuration(activeTime.active_ms || 0)}</div>
+          <div className="f12 muted" style={{ marginTop: 4 }}>
+            hands-on runtime across {fmtNum(activeTime.sessions || 0)} session{activeTime.sessions === 1 ? '' : 's'} · idle gaps &gt; 5 min excluded
+          </div>
+          <div className="metric-source">source: message + tool-call timeline</div>
+        </Link>
+        <Link href="/oversight" className="card stat" style={{ textDecoration: 'none' }}>
+          <div className="stat-label"><FileDiff size={13} /> Lines edited by AI</div>
+          <div className="stat-value" style={{ fontSize: 28 }}>
+            {fmtNum(aiLines.added || 0)}
+            <span className="f13 muted" style={{ marginLeft: 8, fontWeight: 400 }}>+added</span>
+            <span className="f13 muted" style={{ marginLeft: 10 }}>−{fmtNum(aiLines.removed || 0)}</span>
+          </div>
+          <div className="f12 muted" style={{ marginTop: 4 }}>
+            net {fmtNum((aiLines.added || 0) - (aiLines.removed || 0))} lines · {fmtNum(aiLines.sessions || 0)} session{aiLines.sessions === 1 ? '' : 's'} with captured edits
+          </div>
+          <div className="metric-source">source: file_events (edit · write · create)</div>
+        </Link>
+      </div>
+      </ErrorBoundary>
 
       {/* Row 1: Ring chart + Sparkline tiles */}
       <div className="grid mb-20" style={{ gridTemplateColumns: '280px 1fr' }}>

@@ -48,9 +48,12 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <Link href="/" className="brand">
-        <span className="brand-glyph">
-          <span className="b1" /><span className="b2" /><span className="b3" />
-        </span>
+        <svg className="brand-glyph" width="28" height="28" viewBox="0 0 72 72" aria-hidden="true">
+          <rect width="72" height="72" rx="17" fill="var(--accent)" />
+          <path d="M19 26 L26 32 L19 38" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="31" y="29.5" width="22" height="5" rx="2.5" fill="#fff" opacity="0.7" />
+          <rect x="19" y="46" width="34" height="6.5" rx="3.25" fill="#fff" />
+        </svg>
         <span className="brand-name">Agent<b>DX</b></span>
       </Link>
 
