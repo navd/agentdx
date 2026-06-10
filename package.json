@@ -1,6 +1,6 @@
 {
   "name": "@agentdx/agentdx",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "publishConfig": {
     "access": "public"
   },
@@ -30,7 +30,7 @@
     "privacy"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "files": [
     "bin/",
@@ -58,7 +58,7 @@
     "start": "node bin/agentdx.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "^12.4.1",
     "chalk": "^5.4.1",
     "commander": "^13.1.0"
   },
