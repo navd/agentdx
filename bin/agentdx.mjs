@@ -182,7 +182,7 @@ function paint(chalk) {
 function printBanner(chalk) {
   const p = paint(chalk);
   console.log();
-  console.log('  ' + p.red('●') + '  ' + p.bold(p.green('A G E N T D X')) + '   ' + p.dim('coding-agent flight recorder'));
+  console.log('  ' + p.red('●') + '  ' + p.bold(p.green('A G E N T D X')) + '   ' + p.dim('your agents, summarized'));
   console.log('  ' + p.dim('━'.repeat(INNER)));
 }
 
@@ -203,12 +203,12 @@ function printLogoBig(chalk) {
   console.log();
   if (cols < 64 || !chalk.hex) {
     console.log('  ' + p.bold(p.green('A G E N T D X')));
-    console.log('  ' + p.dim('coding-agent flight recorder · 100% local'));
+    console.log('  ' + p.dim('your agents, summarized · 100% local'));
     console.log('  ' + p.dim('━'.repeat(INNER)));
     return;
   }
   LOGO.forEach((line, i) => console.log('  ' + chalk.hex(LOGO_SHADES[i])(line)));
-  console.log('  ' + p.dim('coding-agent flight recorder · 100% local'));
+  console.log('  ' + p.dim('your agents, summarized · 100% local'));
   console.log('  ' + p.dim('━'.repeat(58)));
 }
 
@@ -437,7 +437,7 @@ const program = new Command();
 
 program
   .name('agentdx')
-  .description('Coding-agent flight recorder and evidence console')
+  .description('Your AI coding agents, summarized — local usage, oversight, and risk console')
   .version(VERSION)
   .showHelpAfterError('(run `agentdx --help` for usage)');
 
