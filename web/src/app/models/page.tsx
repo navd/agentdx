@@ -1,4 +1,5 @@
 import { getDb, fmtTok, fmtNum } from '@/lib/db';
+import { estimateCostUsd, getModelPricing, fmtUsd } from '@/lib/pricing';
 import { CsvExport } from '@/components/csv-export';
 import { RingChart } from '@/components/ring-chart';
 import { AreaChart } from '@/components/area-chart';
@@ -101,9 +102,38 @@ function getModelsData() {
     providerMap.set(prov, entry);
   }
 
-  const providers: { name: string; mode: 'BYOK' | 'Local'; modelCount: number; totalTokens: number }[] = [];
+  // Estimated API cost per model and per provider. Unknown models contribute
+  // to `unpricedTokens` (shown as a caveat) instead of silently costing $0.
+  const modelCosts = new Map<string, number | null>();
+  const providerCosts = new Map<string, number>();
+  let estCostTotal = 0;
+  let unpricedTokens = 0;
+  for (const m of models) {
+    const cost = estimateCostUsd(m.model, {
+      input: m.input_tokens || 0,
+      output: m.output_tokens || 0,
+      cacheRead: m.cache_read || 0,
+      cacheWrite: m.cache_write || 0,
+    });
+    modelCosts.set(m.model, cost);
+    if (cost === null) {
+      unpricedTokens += m.total_tokens || 0;
+    } else {
+      estCostTotal += cost;
+      const prov = deriveProvider(m.model);
+      providerCosts.set(prov, (providerCosts.get(prov) || 0) + cost);
+    }
+  }
+
+  const providers: { name: string; mode: 'BYOK' | 'Local'; modelCount: number; totalTokens: number; estCost: number | null }[] = [];
   for (const [name, data] of providerMap) {
-    providers.push({ name, mode: isLocalProvider(name) ? 'Local' : 'BYOK', modelCount: data.models.size, totalTokens: data.totalTokens });
+    providers.push({
+      name,
+      mode: isLocalProvider(name) ? 'Local' : 'BYOK',
+      modelCount: data.models.size,
+      totalTokens: data.totalTokens,
+      estCost: providerCosts.has(name) || isLocalProvider(name) ? (providerCosts.get(name) || 0) : null,
+    });
   }
   providers.sort((a, b) => b.totalTokens - a.totalTokens);
 
@@ -159,11 +189,11 @@ function getModelsData() {
   // column, so joining via session pooled multi-model sessions and credited
   // every model with the same (fabricated) tool stats.
 
-  return { totals, grandTotal: grand.t || 0, agentCount, models, providers, weeklyTokens, reliability };
+  return { totals, grandTotal: grand.t || 0, agentCount, models, providers, weeklyTokens, reliability, modelCosts, estCostTotal, unpricedTokens };
 }
 
 export default function ModelsPage() {
-  const { totals, grandTotal, agentCount, models, providers, weeklyTokens, reliability } = getModelsData();
+  const { totals, grandTotal, agentCount, models, providers, weeklyTokens, reliability, modelCosts, estCostTotal, unpricedTokens } = getModelsData();
 
   if (models.length === 0) {
     return (
@@ -243,7 +273,7 @@ export default function ModelsPage() {
           <p className="page-sub">Usage visibility across {agentCount.c} agents &middot; {providers.length} providers</p>
         </div>
         <div className="page-head-actions">
-          <CsvExport data={models.map(m => ({ model: m.model, input_tokens: m.input_tokens, output_tokens: m.output_tokens, cache_read: m.cache_read, messages: m.messages }))} filename="models-usage.csv" />
+          <CsvExport data={models.map(m => ({ model: m.model, input_tokens: m.input_tokens, output_tokens: m.output_tokens, cache_read: m.cache_read, messages: m.messages, est_cost_usd: modelCosts.get(m.model)?.toFixed(2) ?? '' }))} filename="models-usage.csv" />
         </div>
       </div>
 
@@ -282,9 +312,9 @@ export default function ModelsPage() {
             <div className="stat-foot">{reliability.failed_calls || 0} failed</div>
           </div>
           <div className="card stat" style={{ padding: '14px 16px' }}>
-            <div className="stat-label">Providers</div>
-            <div className="stat-value" style={{ fontSize: 24 }}>{providers.length}</div>
-            <div className="stat-foot">{providers.map(p => p.name).join(', ')}</div>
+            <div className="stat-label">Est. API cost</div>
+            <div className="stat-value" style={{ fontSize: 24 }}>{fmtUsd(estCostTotal)}</div>
+            <div className="stat-foot">{unpricedTokens > 0 ? `at list prices · ${fmtTok(unpricedTokens)} tokens unpriced` : 'at public API list prices'}</div>
           </div>
           <div className="card stat" style={{ padding: '14px 16px' }}>
             <div className="stat-label">Avg tool latency</div>
@@ -361,6 +391,7 @@ export default function ModelsPage() {
               <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 16 }}>
                 <span>{p.modelCount} model{p.modelCount !== 1 ? 's' : ''}</span>
                 <span>{fmtTok(p.totalTokens)}</span>
+                <span className="fw6">{p.mode === 'Local' ? '$0' : p.estCost !== null ? `~${fmtUsd(p.estCost)}` : '—'}</span>
               </div>
             </div>
           ))}
@@ -382,10 +413,13 @@ export default function ModelsPage() {
                   <th className="num">Cache</th>
                   <th className="num">Total</th>
                   <th className="num">Cache %</th>
+                  <th className="num">Est. cost</th>
                 </tr>
               </thead>
               <tbody>
                 {models.map(m => {
+                  const cost = modelCosts.get(m.model);
+                  const pricing = getModelPricing(m.model);
                   return (
                     <tr key={m.model} className="clickable">
                       <td>
@@ -400,6 +434,13 @@ export default function ModelsPage() {
                       <td className="num">{fmtTok(m.cache_read)}</td>
                       <td className="num fw6">{fmtTok(m.total_tokens)}</td>
                       <td className="num"><span className="mono f12">{m.cache_pct}%</span></td>
+                      <td className="num">
+                        {cost === null || cost === undefined
+                          ? <span className="f12 muted" title="No public API price known for this model">unpriced</span>
+                          : <span className="mono f12 fw6" title={pricing ? `$${pricing.input}/M in · $${pricing.output}/M out · $${pricing.cacheRead}/M cache read${pricing.cacheWrite ? ` · $${pricing.cacheWrite}/M cache write` : ''}` : undefined}>
+                              {pricing?.local ? '$0 (local)' : fmtUsd(cost)}
+                            </span>}
+                      </td>
                     </tr>
                   );
                 })}
@@ -408,6 +449,12 @@ export default function ModelsPage() {
           </div>
         </Collapsible>
       </div>
+
+      <p className="f12 muted" style={{ marginTop: 12 }}>
+        Cost is an estimate of what this usage would cost at public pay-as-you-go API list prices
+        (standard tier, no batch/subscription discounts; Anthropic cache writes at the 5-minute rate).
+        Local models run via Ollama cost $0. Models without a known public price are marked unpriced.
+      </p>
     </div>
   );
 }

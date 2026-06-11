@@ -1,4 +1,5 @@
 import { getDb, fmtTok, fmtNum, fmtDuration, timeAgo } from '@/lib/db';
+import { estimateCostUsd, fmtUsd } from '@/lib/pricing';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TimelineFilter, type TimelineItem } from '@/components/timeline-filter';
@@ -136,6 +137,27 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const totalTok = (s.total_input_tokens || 0) + (s.total_output_tokens || 0) + (s.total_cache_read || 0);
   const cacheWrite = s.total_cache_write || 0;
   const barTotal = totalTok + cacheWrite;
+
+  // Estimated API cost — summed per model from model_usage so multi-model
+  // sessions price each slice at its own rate. Models without a known list
+  // price are excluded and flagged, never counted as $0.
+  let sessionCost = 0;
+  let hasPricedUsage = false;
+  let hasUnpricedUsage = false;
+  for (const mu of modelUsage as any[]) {
+    const c = estimateCostUsd(mu.model, {
+      input: mu.input_tokens || 0,
+      output: mu.output_tokens || 0,
+      cacheRead: mu.cache_read || 0,
+      cacheWrite: mu.cache_write || 0,
+    });
+    if (c === null) {
+      if ((mu.input_tokens || 0) + (mu.output_tokens || 0) + (mu.cache_read || 0) > 0) hasUnpricedUsage = true;
+    } else {
+      sessionCost += c;
+      hasPricedUsage = true;
+    }
+  }
   const projectName = s.project_path?.split('/').pop() || '—';
 
   const timelineItems: TimelineItem[] = [];
@@ -326,6 +348,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 </div>
               ))}
             </div>
+            {(hasPricedUsage || hasUnpricedUsage) && (
+              <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-faint, var(--surface-3))' }}>
+                <span className="f12 muted" title="What this session's tokens would cost at public pay-as-you-go API list prices. Local models cost $0.">Est. API cost</span>
+                <span className="mono f13 fw6">
+                  {hasPricedUsage ? `~${fmtUsd(sessionCost)}` : '—'}
+                  {hasUnpricedUsage && <span className="f12 muted" style={{ fontWeight: 400 }}> (partial)</span>}
+                </span>
+              </div>
+            )}
           </div>
           </ErrorBoundary>
 

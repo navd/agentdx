@@ -1,4 +1,5 @@
 import { getDb, fmtTok, fmtNum, fmtDuration, timeAgo, getPeriodMs } from '@/lib/db';
+import { estimateCostUsd, fmtUsd } from '@/lib/pricing';
 import { readUserConfig } from '@/lib/config';
 import Link from 'next/link';
 import { BarChart } from '@/components/bar-chart';
@@ -68,6 +69,24 @@ function getOverviewData(period: string) {
     WHERE mu.model != '<synthetic>' ${andClause}
     GROUP BY mu.model ORDER BY total_tokens DESC LIMIT 8
   `).all() as any[];
+
+  // Estimated API cost for the selected period, priced per model from
+  // model_usage (the only table that carries cache_write per model).
+  const costRows = db.prepare(`
+    SELECT mu.model, SUM(mu.input_tokens) AS input, SUM(mu.output_tokens) AS output,
+      SUM(mu.cache_read) AS cache_read, SUM(mu.cache_write) AS cache_write,
+      SUM(mu.input_tokens + mu.output_tokens + mu.cache_read) AS total
+    FROM model_usage mu JOIN sessions s ON s.id = mu.session_id
+    WHERE mu.model != '<synthetic>' ${andClause}
+    GROUP BY mu.model
+  `).all() as any[];
+  let estCost = 0;
+  let unpricedTokens = 0;
+  for (const r of costRows) {
+    const c = estimateCostUsd(r.model, { input: r.input || 0, output: r.output || 0, cacheRead: r.cache_read || 0, cacheWrite: r.cache_write || 0 });
+    if (c === null) unpricedTokens += r.total || 0;
+    else estCost += c;
+  }
 
   const modelCount = db.prepare(`
     SELECT COUNT(DISTINCT mu.model) as c
@@ -182,7 +201,7 @@ function getOverviewData(period: string) {
     agents: agents.map((a: any) => a.agent),
     dailySessions, dailySessionsSpark, dailyTokensSpark, dailyErrorsSpark,
     repos, recentSessions, errorTotals, lastCollection, repoCount,
-    ruleErrors, activeTime, aiLines,
+    ruleErrors, activeTime, aiLines, estCost, unpricedTokens,
   };
 }
 
@@ -194,7 +213,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     totals, modelUsage, modelCount, agentStats, trendRows, agents,
     dailySessions, dailySessionsSpark, dailyTokensSpark, dailyErrorsSpark,
     repos, recentSessions, errorTotals, lastCollection, repoCount, ruleErrors,
-    activeTime, aiLines,
+    activeTime, aiLines, estCost, unpricedTokens,
   } = getOverviewData(period);
 
   const totalTokens = (totals.input_tokens || 0) + (totals.output_tokens || 0) + (totals.cache_read || 0);
@@ -295,9 +314,9 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         ]} />
       </div>
 
-      {/* Effort: real hands-on time + code the AI actually wrote */}
+      {/* Effort: real hands-on time + code the AI actually wrote + what it would cost */}
       <ErrorBoundary fallbackTitle="Effort metrics failed to render">
-      <div className="grid g-2 mb-20">
+      <div className="grid g-3 mb-20">
         <Link href="/sessions" className="card stat" style={{ textDecoration: 'none' }}>
           <div className="stat-label"><Activity size={13} /> Active coding time</div>
           <div className="stat-value" style={{ fontSize: 28 }}>{fmtDuration(activeTime.active_ms || 0)}</div>
@@ -317,6 +336,15 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
             net {fmtNum((aiLines.added || 0) - (aiLines.removed || 0))} lines · {fmtNum(aiLines.sessions || 0)} session{aiLines.sessions === 1 ? '' : 's'} with captured edits
           </div>
           <div className="metric-source">source: file_events (edit · write · create)</div>
+        </Link>
+        <Link href="/models" className="card stat" style={{ textDecoration: 'none' }}>
+          <div className="stat-label"><BrainCircuit size={13} /> Est. API cost</div>
+          <div className="stat-value" style={{ fontSize: 28 }}>~{fmtUsd(estCost)}</div>
+          <div className="f12 muted" style={{ marginTop: 4 }}>
+            what this usage would cost at API list prices · local models $0
+            {unpricedTokens > 0 && <> · {fmtTok(unpricedTokens)} tokens unpriced</>}
+          </div>
+          <div className="metric-source">source: model_usage × public list prices</div>
         </Link>
       </div>
       </ErrorBoundary>
