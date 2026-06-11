@@ -1,6 +1,7 @@
 // Distinct hues per agent (not two greens) so bars/legends are tell-apart.
 export const AGENT_COLORS: Record<string, string> = {
   'claude-code': '#46A35E', // green
+  'cowork': '#C15F3C',      // terracotta
   'cursor': '#E0A458',      // amber
   'codex': '#6366F1',       // indigo
   'antigravity': '#14B8A6', // teal

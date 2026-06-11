@@ -4,7 +4,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "A local-first tool that shows you the real picture of your AI coding agents — tokens, tools, models, and errors across Claude Code, Codex, Cursor, Antigravity, VS Code (Copilot), and Continue.dev. 100% local: no accounts, no telemetry.",
+  "description": "A local-first tool that shows you the real picture of your AI coding agents — tokens, tools, models, and errors across Claude Code, Cowork, Codex, Cursor, Antigravity, VS Code (Copilot), and Continue.dev. 100% local: no accounts, no telemetry.",
   "author": "navd",
   "license": "MIT",
   "repository": {

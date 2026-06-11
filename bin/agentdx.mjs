@@ -31,6 +31,7 @@ function sourceWatchDirs() {
   const home = homedir();
   const candidates = [
     join(home, '.claude', 'projects'),
+    join(claudeAppDir(), 'local-agent-mode-sessions'), // Cowork
     join(home, '.codex'),
     join(home, '.cursor', 'projects'),
     join(home, '.gemini', 'antigravity', 'brain'), // Antigravity
@@ -214,7 +215,15 @@ function printLogoBig(chalk) {
 
 // ── Animated per-agent collection renderer ───────────────────────
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const AGENT_ORDER = ['claude-code', 'codex', 'cursor', 'antigravity', 'vscode', 'continue'];
+const AGENT_ORDER = ['claude-code', 'cowork', 'codex', 'cursor', 'antigravity', 'vscode', 'continue'];
+
+/** Claude desktop app dir — Cowork (local agent mode) workspaces live here. */
+function claudeAppDir() {
+  const home = homedir();
+  if (process.platform === 'darwin') return join(home, 'Library/Application Support/Claude');
+  if (process.platform === 'win32') return join(process.env.APPDATA || join(home, 'AppData/Roaming'), 'Claude');
+  return join(home, '.config/Claude');
+}
 
 /** VS Code User dir (Copilot chat sessions live under workspaceStorage). */
 function vscodeUserDir() {
@@ -228,6 +237,7 @@ function detectSources() {
   const home = homedir();
   return {
     'claude-code': existsSync(join(home, '.claude', 'projects')),
+    cowork: existsSync(join(claudeAppDir(), 'local-agent-mode-sessions')),
     codex: existsSync(join(home, '.codex')),
     cursor: existsSync(join(home, '.cursor', 'projects')),
     antigravity: existsSync(join(home, '.gemini', 'antigravity', 'brain')),
@@ -724,6 +734,7 @@ function printCollectSummary(chalk, results, { verbose = false } = {}) {
 function printZeroAgentsMessage(chalk) {
   console.log(chalk.yellow('\n  No AI coding agent data found. Supported agents:'));
   console.log(chalk.dim('    • Claude Code   ~/.claude/projects/'));
+  console.log(chalk.dim('    • Cowork        Claude desktop app (local agent mode)'));
   console.log(chalk.dim('    • Codex         ~/.codex/'));
   console.log(chalk.dim('    • Cursor        ~/.cursor/'));
   console.log(chalk.dim('    • Antigravity   ~/.gemini/antigravity/'));

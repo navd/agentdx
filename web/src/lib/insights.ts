@@ -69,6 +69,7 @@ const MODEL_PALETTE = ['#22C55E', '#F59E0B', '#6366F1', '#EC4899', '#06B6D4', '#
 /** Stable per-agent colors (match the dashboard chart palette). */
 export const AGENT_COLORS: Record<string, string> = {
   'claude-code': '#46A35E', // green
+  cowork: '#C15F3C',        // terracotta
   cursor: '#E0A458',        // amber
   codex: '#6366F1',         // indigo
   antigravity: '#14B8A6',   // teal

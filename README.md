@@ -58,6 +58,7 @@ AgentDX is a free tool that reads the local logs your AI coding agents already w
 | Agent | Source | Status |
 |---|---|---|
 | **Claude Code** | `~/.claude/projects/` | Stable |
+| **Cowork (Claude app)** | Claude desktop local agent mode | Stable |
 | **Cursor** | `~/.cursor/projects/` | Stable |
 | **Codex** | `~/.codex/` | Stable |
 | **Antigravity** | `~/.gemini/antigravity/` | Stable |

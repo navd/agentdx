@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import { getDb } from '../core/db.js';
 import { resolveConfig, checkSources } from '../core/config.js';
 import { collectClaude } from './claude.js';
+import { collectCowork, coworkBaseDir } from './cowork.js';
 import { collectCodex, backfillCodexTokens } from './codex.js';
 import { collectCursor } from './cursor.js';
 import { collectAntigravity } from './antigravity.js';
@@ -109,6 +110,12 @@ export async function runCollection(overrides: { claudeDir?: string; codexDir?: 
   // Claude Code
   if (sources.claude) {
     await runAgent('claude-code', (op) => collectClaude(db, config.claudeDir, op), runInsert, runUpdate, results, hooks);
+  }
+
+  // Cowork (Claude desktop app, local agent mode)
+  const coworkBase = coworkBaseDir();
+  if (coworkBase) {
+    await runAgent('cowork', (op) => collectCowork(db, coworkBase, op), runInsert, runUpdate, results, hooks);
   }
 
   // Codex

@@ -128,6 +128,7 @@ function getAgentsData() {
 
 const AGENT_COLORS: Record<string, string> = {
   'claude-code': 'var(--chart-1)',
+  'cowork': '#C15F3C',
   'codex': 'var(--chart-3)',
   'cursor': 'var(--chart-2)',
   'antigravity': 'var(--chart-4)',
