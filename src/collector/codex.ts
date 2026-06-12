@@ -81,6 +81,13 @@ async function parseCodexJsonl(filePath: string, sessionId: string): Promise<Par
   let seq = 0;
   let sessionModel: string | null = null;
 
+  // Per-message attribution: every API call emits a token_count event with
+  // last_token_usage. Accumulate those deltas and attach the running sum to
+  // the next visible assistant message (reasoning/tool-call API turns between
+  // visible messages roll into it), so each response carries what it cost.
+  let pendIn = 0, pendOut = 0, pendCacheRead = 0;
+  let lastAssistant: Message | null = null;
+
   const stream = createReadStream(filePath, { encoding: 'utf-8' });
   const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
@@ -122,7 +129,7 @@ async function parseCodexJsonl(filePath: string, sessionId: string): Promise<Par
       }
 
       if (p.type === 'agent_message' && p.message) {
-        messages.push({
+        const msg: Message = {
           id: `${sessionId}-a${seq}`,
           session_id: sessionId,
           parent_id: null,
@@ -131,12 +138,25 @@ async function parseCodexJsonl(filePath: string, sessionId: string): Promise<Par
           content_text: truncate(p.message),
           content_type: 'text',
           timestamp: ts,
-          input_tokens: 0,
-          output_tokens: 0,
-          cache_read: 0,
+          input_tokens: pendIn,
+          output_tokens: pendOut,
+          cache_read: pendCacheRead,
           cache_write: 0,
           seq: seq++,
-        });
+        };
+        pendIn = 0; pendOut = 0; pendCacheRead = 0;
+        lastAssistant = msg;
+        messages.push(msg);
+      }
+
+      if (p.type === 'token_count' && p.info?.last_token_usage) {
+        // Same cache de-include as the session totals below: Codex's
+        // input_tokens is inclusive of cached_input_tokens.
+        const lu = p.info.last_token_usage;
+        const cached = lu.cached_input_tokens || 0;
+        pendIn += Math.max(0, (lu.input_tokens || 0) - cached);
+        pendCacheRead += cached;
+        pendOut += lu.output_tokens || 0;
       }
 
       if (p.type === 'token_count' && p.info?.total_token_usage) {
@@ -182,6 +202,14 @@ async function parseCodexJsonl(filePath: string, sessionId: string): Promise<Par
         }
       }
     }
+  }
+
+  // Usage accrued after the final visible message (trailing tool/reasoning
+  // turns) still belongs to the last response — don't drop it.
+  if (lastAssistant && (pendIn || pendOut || pendCacheRead)) {
+    lastAssistant.input_tokens += pendIn;
+    lastAssistant.output_tokens += pendOut;
+    lastAssistant.cache_read += pendCacheRead;
   }
 
   if (sessionModel) {
@@ -240,12 +268,19 @@ export async function collectCodex(db: Database.Database, codexDir: string, onPr
       collected_at = excluded.collected_at
   `);
 
+  // Message IDs are deterministic (sessionId + seq), so re-parsing a rollout
+  // must refresh the token columns in place — rows collected before the
+  // per-message attribution existed are stuck at 0 otherwise.
   const insertMessage = db.prepare(`
     INSERT INTO messages (id, session_id, parent_id, role, model, content_text,
       content_type, timestamp, input_tokens, output_tokens, cache_read, cache_write, seq)
     VALUES (@id, @session_id, @parent_id, @role, @model, @content_text,
       @content_type, @timestamp, @input_tokens, @output_tokens, @cache_read, @cache_write, @seq)
-    ON CONFLICT(id) DO NOTHING
+    ON CONFLICT(id) DO UPDATE SET
+      input_tokens = excluded.input_tokens,
+      output_tokens = excluded.output_tokens,
+      cache_read = excluded.cache_read,
+      timestamp = excluded.timestamp
   `);
 
   const insertToolCall = db.prepare(`
@@ -288,6 +323,14 @@ export async function collectCodex(db: Database.Database, codexDir: string, onPr
   if (!getWatermark.get('codex_latency_v1')) {
     db.prepare(`DELETE FROM collection_state WHERE source = ?`).run(sourceKey);
     setWatermark.run({ source: 'codex_latency_v1', last_file: null, last_offset: 0, last_session_id: null, last_timestamp: Date.now(), updated_at: Date.now() });
+  }
+
+  // One-time: messages collected before per-message token attribution carry
+  // zeros. Clear the codex watermark once so every rollout re-parses and the
+  // upserting insertMessage refreshes the token columns.
+  if (!getWatermark.get('codex_msg_tokens_v1')) {
+    db.prepare(`DELETE FROM collection_state WHERE source = ?`).run(sourceKey);
+    setWatermark.run({ source: 'codex_msg_tokens_v1', last_file: null, last_offset: 0, last_session_id: null, last_timestamp: Date.now(), updated_at: Date.now() });
   }
 
   const watermark = getWatermark.get(sourceKey) as any;

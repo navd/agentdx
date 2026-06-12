@@ -165,12 +165,20 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     if (msg.role === 'user' && msg.content_type === 'tool_result') continue;
     if (!msg.content_text && msg.content_type === 'text') continue;
     const content = msg.content_text ? (msg.content_text.length > 800 ? msg.content_text.slice(0, 800) + '…' : msg.content_text) : null;
+    // Per-message consumption: real usage where the agent logs it (Claude
+    // Code, Cowork, Codex), incl. cache reads — that's what the call actually
+    // billed. Agents with no per-message signal (Cursor, VS Code, Antigravity,
+    // Continue) get a text-length estimate, clearly flagged as such.
+    const realTok = (msg.input_tokens || 0) + (msg.output_tokens || 0) + (msg.cache_read || 0);
+    const estTok = msg.role === 'assistant' && realTok === 0 && msg.content_text
+      ? Math.ceil(msg.content_text.length / 4) : 0;
     timelineItems.push({
       type: msg.role,
       ts: msg.timestamp,
       content,
       model: msg.role === 'assistant' ? msg.model : null,
-      tokens: msg.role === 'assistant' ? ((msg.input_tokens || 0) + (msg.output_tokens || 0)) : undefined,
+      tokens: msg.role === 'assistant' ? (realTok || estTok) : undefined,
+      tokensEstimated: msg.role === 'assistant' && realTok === 0 && estTok > 0,
     });
   }
   for (const tc of toolCalls) {

@@ -9,6 +9,8 @@ interface TimelineItem {
   content?: string | null;
   model?: string | null;
   tokens?: number;
+  /** True when `tokens` is a text-length estimate (agent logs no per-message usage). */
+  tokensEstimated?: boolean;
   toolName?: string;
   isError?: boolean;
   icon?: string;
@@ -205,7 +207,11 @@ function TimelineNode({ item }: { item: TimelineItem }) {
       ) : null}
       <div className="chain-meta mono">
         {item.model && <span className="tag-model" style={{ marginRight: 8 }}>{item.model}</span>}
-        {item.tokens ? `${fmtTok(item.tokens)} tokens` : ''}
+        {item.tokens ? (
+          item.tokensEstimated
+            ? <span title="Estimated from text length (~4 chars/token) — this agent logs no per-message usage" style={{ opacity: 0.7 }}>~{fmtTok(item.tokens)} tokens est.</span>
+            : `${fmtTok(item.tokens)} tokens`
+        ) : ''}
       </div>
     </div>
   );
