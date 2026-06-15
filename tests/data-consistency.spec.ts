@@ -101,9 +101,11 @@ test.describe('Data consistency', () => {
     db.close();
 
     await page.goto('/repositories');
-    const statValues = await page.locator('.stat-value').allTextContents();
+    // The repo summary moved from .stat-value cards to DrilldownTiles
+    // (.drill-tile); read both so the assertion survives either layout.
+    const statValues = await page.locator('.stat-value, .drill-tile').allTextContents();
     const found = statValues.some(t => t.includes(String(cnt)));
-    expect(found, `Repo count ${cnt} not found: ${statValues.join(', ')}`).toBe(true);
+    expect(found, `Repo count ${cnt} not found: ${statValues.join(' | ')}`).toBe(true);
   });
 
   test('models page model count matches DB', async ({ page }) => {

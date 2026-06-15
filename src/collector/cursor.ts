@@ -350,7 +350,30 @@ interface CursorBubble {
   tools: number;         // approx tool activity in this bubble
 }
 
-interface ComposerMeta { createdAt: number; mode: string }
+interface ComposerMeta { createdAt: number; mode: string; model: string | null }
+
+/**
+ * Cursor records its picked model in composerData.modelConfig.modelName using
+ * its own naming ("claude-4.6-opus-high-thinking", "gpt-5.3-codex",
+ * "composer-2", "default"). Normalize the Anthropic/OpenAI ones to the API-style
+ * ids the rest of the app prices against (claude-opus-4-6, gpt-5.3-codex).
+ * Cursor's own Composer models and the auto-select "default" have no public
+ * per-token price — keep a readable label so they still surface (unpriced) on
+ * the Models page rather than vanishing.
+ */
+export function normalizeCursorModel(raw: string | null | undefined): string | null {
+  if (!raw) return 'cursor-auto';
+  const m = raw.toLowerCase().trim();
+  if (m === 'default' || m === 'auto') return 'cursor-auto';
+  // claude-<maj>[.<min>]-<tier>-... → claude-<tier>-<maj>[-<min>]
+  const cl = m.match(/^claude-(\d+)(?:\.(\d+))?-(opus|sonnet|haiku)/);
+  if (cl) {
+    const [, maj, min, tier] = cl;
+    return min ? `claude-${tier}-${maj}-${min}` : `claude-${tier}-${maj}`;
+  }
+  // gpt-* and composer-* are already in a usable form; pass through.
+  return m;
+}
 
 interface CursorState {
   metas: Map<string, ComposerMeta>;
@@ -395,6 +418,7 @@ function loadCursorState(): CursorState {
         metas.set(id, {
           createdAt: typeof d.createdAt === 'number' ? d.createdAt : 0,
           mode: typeof d.unifiedMode === 'string' ? d.unifiedMode : 'agent',
+          model: d.modelConfig?.modelName ?? null,
         });
       } catch { /* skip malformed */ }
     }
@@ -496,6 +520,8 @@ function buildComposerSession(
 
   if (messages.length === 0) return null;
 
+  const model = normalizeCursorModel(meta?.model);
+
   const session: Session = {
     id: composerId,
     agent: 'cursor',
@@ -506,7 +532,7 @@ function buildComposerSession(
     repository_url: null,
     git_branch: null,
     git_sha: null,
-    model_primary: null,       // Cursor does not expose the model in this store
+    model_primary: model,
     started_at: startedAt,
     ended_at: endedAt,
     duration_ms: endedAt > startedAt ? endedAt - startedAt : null,
@@ -521,7 +547,32 @@ function buildComposerSession(
     collected_at: Date.now(),
   };
 
-  return { session, messages, toolCalls: [], modelUsage: new Map() };
+  return { session, messages, toolCalls: [], modelUsage: cursorModelUsage(composerId, model, totalInput, totalOutput, messages) };
+}
+
+/** One model_usage row for a Cursor session so its tokens surface on the
+ *  Models page and feed the cost estimate. Empty when the session has no
+ *  tokens (nothing to attribute). */
+function cursorModelUsage(
+  sessionId: string,
+  model: string | null,
+  input: number,
+  output: number,
+  messages: Message[],
+): Map<string, ModelUsage> {
+  const usage = new Map<string, ModelUsage>();
+  if ((input || output) && model) {
+    usage.set(model, {
+      session_id: sessionId,
+      model,
+      input_tokens: input,
+      output_tokens: output,
+      cache_read: 0,
+      cache_write: 0,
+      message_count: messages.filter((m) => m.role === 'assistant').length,
+    });
+  }
+  return usage;
 }
 
 export async function collectCursor(
@@ -541,6 +592,15 @@ export async function collectCursor(
     if (input || output) tokenTotals.set(cid, { input, output });
   }
   const ingested = new Set<string>();
+
+  // One-time: existing cursor sessions were collected before model attribution
+  // existed (no model_primary, no model_usage row). The per-project mtime
+  // watermark would skip re-parsing them, so clear the cursor watermarks once
+  // to force a full re-parse; the marker keeps this from repeating.
+  if (!w.getWatermark.get('cursor_model_usage_v1')) {
+    db.prepare(`DELETE FROM collection_state WHERE source LIKE 'cursor::%'`).run();
+    w.setWatermark.run({ source: 'cursor_model_usage_v1', last_file: null, last_offset: 0, last_session_id: null, last_timestamp: Date.now(), updated_at: Date.now() });
+  }
 
   const projects = discoverProjects(cursorDir);
   const progressTotal = projects.length + state.bubbles.size;
@@ -566,12 +626,22 @@ export async function collectCursor(
         // Enrich with git info
         parsed.session.git_branch = gitBranch;
 
-        // Enrich with token totals from state.vscdb (composerId === transcript id)
+        // Enrich with token totals + model from state.vscdb (composerId ===
+        // transcript id). The transcript file carries no model or token counts;
+        // both live only in the app state DB.
         const tok = tokenTotals.get(sess.id);
         if (tok) {
           parsed.session.total_input_tokens = tok.input;
           parsed.session.total_output_tokens = tok.output;
         }
+        const cMeta = state.metas.get(sess.id);
+        const cModel = normalizeCursorModel(cMeta?.model);
+        parsed.session.model_primary = cModel;
+        parsed.modelUsage = cursorModelUsage(
+          sess.id, cModel,
+          parsed.session.total_input_tokens, parsed.session.total_output_tokens,
+          parsed.messages,
+        );
 
         persistSession(w, parsed, stats);
         ingested.add(sess.id);
