@@ -134,6 +134,7 @@ const AGENT_COLORS: Record<string, string> = {
   'antigravity': 'var(--chart-4)',
   vscode: 'var(--chart-5)',
   continue: '#8B5CF6',
+  opencode: '#EC4899',
 };
 
 export default function AgentsPage() {

@@ -60,6 +60,20 @@ export function AreaChart({ series, labels, height = 180, stacked = true, hrefTe
     yPos: y(maxVal * pct),
   }));
 
+  // Thin x-axis ticks: with many weekly buckets every label collides into an
+  // illegible smear, so show ~8 evenly-spaced labels (always the first + last).
+  const MAX_TICKS = 8;
+  const stride = Math.max(1, Math.ceil(n / MAX_TICKS));
+  const ticks: number[] = [];
+  for (let i = 0; i < n; i += stride) ticks.push(i);
+  const lastTick = ticks[ticks.length - 1];
+  if (lastTick !== n - 1) {
+    // Replace a too-close final tick with the last index, else append it.
+    if (n - 1 - lastTick < stride * 0.5) ticks[ticks.length - 1] = n - 1;
+    else ticks.push(n - 1);
+  }
+  const tickSet = new Set(ticks);
+
   const paths = series.map((s, si) => {
     const topPoints = labels.map((_, i) => `${x(i)},${y(cumulative[i][si])}`);
     const botPoints = labels.map((_, i) => {
@@ -99,8 +113,8 @@ export function AreaChart({ series, labels, height = 180, stacked = true, hrefTe
             <text x={padL - 6} y={g.yPos + 4} textAnchor="end" fontSize={10} fill="var(--text-subtle)" fontFamily="var(--mono)">{fmtVal(g.val)}</text>
           </g>
         ))}
-        {/* Vertical week guides — tie each data point to its x-axis label */}
-        {labels.map((_, i) => (
+        {/* Vertical guides only at labelled ticks (one per drawn label). */}
+        {ticks.map((i) => (
           <line key={`vg-${i}`} x1={x(i)} x2={x(i)} y1={padT} y2={padT + plotH} stroke="var(--grid)" strokeWidth={1} opacity={0.5} />
         ))}
         {paths.map(p => (
@@ -111,15 +125,17 @@ export function AreaChart({ series, labels, height = 180, stacked = true, hrefTe
           return <polyline key={s.key + '-line'} points={line.join(' ')} fill="none" stroke={s.color} strokeWidth={1.5} />;
         })}
         {labels.map((label, i) => (
-          <text
-            key={`label-${i}`}
-            x={x(i)}
-            y={height - 14}
-            textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}
-            fontSize={10}
-            fill="var(--text-muted)"
-            fontFamily="var(--mono)"
-          >{label}</text>
+          tickSet.has(i) ? (
+            <text
+              key={`label-${i}`}
+              x={x(i)}
+              y={height - 14}
+              textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}
+              fontSize={10}
+              fill="var(--text-muted)"
+              fontFamily="var(--mono)"
+            >{label}</text>
+          ) : null
         ))}
         <text x={padL + plotW / 2} y={height - 3} textAnchor="middle" fontSize={9} fill="var(--text-subtle)">week starting</text>
         {labels.map((_, i) => {

@@ -37,6 +37,7 @@ function sourceWatchDirs() {
     join(home, '.gemini', 'antigravity', 'brain'), // Antigravity
     join(vscodeUserDir(), 'workspaceStorage'),     // VS Code Copilot chat
     join(home, '.continue', 'sessions'),           // Continue.dev
+    opencodeDataDir(),                             // opencode
   ];
   return candidates.filter((d) => existsSync(d));
 }
@@ -215,7 +216,15 @@ function printLogoBig(chalk) {
 
 // ── Animated per-agent collection renderer ───────────────────────
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const AGENT_ORDER = ['claude-code', 'cowork', 'codex', 'cursor', 'antigravity', 'vscode', 'continue'];
+const AGENT_ORDER = ['claude-code', 'cowork', 'codex', 'cursor', 'antigravity', 'vscode', 'continue', 'opencode'];
+
+/** opencode data dir (opencode.db lives here). */
+function opencodeDataDir() {
+  const home = homedir();
+  if (process.platform === 'win32' && process.env.APPDATA) return join(process.env.APPDATA, 'opencode');
+  if (process.env.XDG_DATA_HOME) return join(process.env.XDG_DATA_HOME, 'opencode');
+  return join(home, '.local', 'share', 'opencode');
+}
 
 /** Claude desktop app dir — Cowork (local agent mode) workspaces live here. */
 function claudeAppDir() {
@@ -243,6 +252,7 @@ function detectSources() {
     antigravity: existsSync(join(home, '.gemini', 'antigravity', 'brain')),
     vscode: existsSync(join(vscodeUserDir(), 'workspaceStorage')),
     continue: existsSync(join(home, '.continue', 'sessions', 'sessions.json')),
+    opencode: existsSync(join(opencodeDataDir(), 'opencode.db')),
   };
 }
 

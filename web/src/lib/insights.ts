@@ -75,6 +75,7 @@ export const AGENT_COLORS: Record<string, string> = {
   antigravity: '#14B8A6',   // teal
   vscode: '#3B82F6',        // blue
   continue: '#8B5CF6',      // purple
+  opencode: '#EC4899',      // pink
 };
 function agentColor(a: string): string {
   return AGENT_COLORS[a] || 'var(--text-muted)';

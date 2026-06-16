@@ -64,6 +64,7 @@ AgentDX is a free tool that reads the local logs your AI coding agents already w
 | **Antigravity** | `~/.gemini/antigravity/` | Stable |
 | **VS Code (Copilot)** | VS Code chat sessions | Stable |
 | **Continue.dev** | `~/.continue/sessions/` | Stable |
+| **opencode** | `~/.local/share/opencode/opencode.db` | Stable |
 
 AgentDX reads local logs and artifacts. It never intercepts live traffic or modifies agent behavior.
 

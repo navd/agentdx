@@ -63,6 +63,7 @@ function getCollectorData() {
     { key: 'antigravity', label: 'Antigravity', dir: join(home, '.gemini', 'antigravity', 'brain'), display: '~/.gemini/antigravity/', state: 'antigravity' },
     { key: 'vscode', label: 'VS Code', dir: join(vscodeUserDir(home), 'workspaceStorage'), display: 'VS Code Copilot chat', state: 'vscode' },
     { key: 'continue', label: 'Continue', dir: join(home, '.continue', 'sessions'), display: '~/.continue/', state: 'continue' },
+    { key: 'opencode', label: 'opencode', dir: join(home, '.local', 'share', 'opencode'), display: '~/.local/share/opencode/', state: 'opencode' },
   ];
   const agents: AgentSource[] = DEFS.map((a) => ({
     key: a.key,

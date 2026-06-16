@@ -10,6 +10,7 @@ import { collectCursor } from './cursor.js';
 import { collectAntigravity } from './antigravity.js';
 import { collectVSCode } from './vscode.js';
 import { collectContinue } from './continue.js';
+import { collectOpencode, opencodeDbPath } from './opencode.js';
 import { backfillSkills, healStaleSessions, recomputeRepositories, recomputeSessionToolCounts } from './shared.js';
 import { backfillFileEvents } from './file-events.js';
 import { collectGit } from './git.js';
@@ -137,6 +138,12 @@ export async function runCollection(overrides: { claudeDir?: string; codexDir?: 
 
   // Continue.dev
   await runAgent('continue', (op) => collectContinue(db, op), runInsert, runUpdate, results, hooks);
+
+  // opencode
+  const opencodeDb = opencodeDbPath();
+  if (opencodeDb) {
+    await runAgent('opencode', (op) => collectOpencode(db, opencodeDb, op), runInsert, runUpdate, results, hooks);
+  }
 
   // One-time backfill: derive skill invocations from already-stored data
   // (collection skips existing sessions, so new extraction logic needs this

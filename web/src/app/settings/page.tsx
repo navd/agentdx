@@ -83,6 +83,7 @@ export default function SettingsPage() {
     { name: 'Antigravity', path: join(home, '.gemini', 'antigravity', 'brain'), agent: 'antigravity', note: 'Google Antigravity trajectories' },
     { name: 'VS Code', path: join(vscodeUser, 'workspaceStorage'), agent: 'vscode', note: 'GitHub Copilot chat sessions' },
     { name: 'Continue', path: join(home, '.continue', 'sessions'), agent: 'continue', note: 'Continue.dev sessions' },
+    { name: 'opencode', path: join(home, '.local', 'share', 'opencode', 'opencode.db'), agent: 'opencode', note: 'opencode session database' },
   ];
 
   const sourceInfo = dataSources.map((ds: any) => {
