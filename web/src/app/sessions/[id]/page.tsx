@@ -414,9 +414,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               <div key={cat} className="mb-12">
                 <div className="f12 fw6 mb-4" style={{ color: 'var(--text-muted)' }}>{cat}</div>
                 {tools.map((t: any) => (
-                  <div key={t.tool_name} className="row between mb-4">
-                    <span className="f12 mono">{t.tool_name}</span>
-                    <span className="f12 mono muted">{t.cnt}{t.errors > 0 ? ` (${t.errors} err)` : ''}</span>
+                  <div key={t.tool_name} className="mb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <span className="f12 mono" style={{ minWidth: 0, overflowWrap: 'anywhere' }} title={t.tool_name}>{t.tool_name}</span>
+                    <span className="f12 mono muted" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t.cnt}{t.errors > 0 ? ` (${t.errors} err)` : ''}</span>
                   </div>
                 ))}
               </div>
