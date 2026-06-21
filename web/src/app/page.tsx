@@ -306,7 +306,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       <div className="mb-16">
         <DrilldownTiles tiles={[
           { label: 'Sessions', value: fmtNum(totals.sessions), detail: `across ${totals.projects} projects`, href: '/sessions', icon: <SquareTerminal size={18} />, tone: 'accent' },
-          { label: 'Models', value: `${modelCount.c} models`, detail: fmtTok(totalTokens) + ' tokens', href: '/models', icon: <BrainCircuit size={18} />, tone: 'info' },
+          { label: 'Models', value: `${modelCount.c} models`, detail: fmtTok(totalTokens) + ' tokens', href: '/tokenomics?tab=models', icon: <BrainCircuit size={18} />, tone: 'info' },
           { label: 'Repositories', value: fmtNum(repoCount.cnt), detail: `${fmtNum(totals.tool_calls || 0)} tool calls`, href: '/repositories', icon: <FileDiff size={18} />, tone: 'pos' },
           { label: 'Rules & policy', value: fmtNum(ruleErrors.cnt) + ' errors', detail: `${errorTotals.sessions_with_errors} sessions`, href: '/risk', icon: <ListChecks size={18} />, tone: ruleErrors.cnt > 0 ? 'warn' : 'pos' },
           { label: 'Risk signals', value: fmtNum(errorTotals.total_errors), detail: 'review needed', href: '/risk', icon: <ShieldCheck size={18} />, tone: errorTotals.total_errors > 0 ? 'neg' : 'pos' },
@@ -337,7 +337,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
           </div>
           <div className="metric-source">source: file_events (edit · write · create)</div>
         </Link>
-        <Link href="/models" className="card stat" style={{ textDecoration: 'none' }}>
+        <Link href="/tokenomics?tab=models" className="card stat" style={{ textDecoration: 'none' }}>
           <div className="stat-label"><BrainCircuit size={13} /> Est. API cost</div>
           <div className="stat-value" style={{ fontSize: 28 }}>~{fmtUsd(estCost)}</div>
           <div className="f12 muted" style={{ marginTop: 4 }}>
@@ -516,7 +516,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
               <h3 className="card-title">Model distribution</h3>
               <p className="card-sub">token share per model</p>
             </div>
-            <div className="right"><Link href="/models" className="lnk f12">Details ›</Link></div>
+            <div className="right"><Link href="/tokenomics?tab=models" className="lnk f12">Details ›</Link></div>
           </div>
           <div className="card-pad">
             <div className="col-flex gap-12">

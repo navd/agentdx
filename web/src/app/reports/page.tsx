@@ -136,7 +136,7 @@ export default function ReportsPage() {
             </div>
           </Link>
 
-          <Link href="/models" className="card card-pad" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link href="/tokenomics?tab=models" className="card card-pad" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="row between mb-8">
               <span className="row gap-8"><BrainCircuit size={16} style={{ color: 'var(--info)' }} /> <span className="f13 fw6">Token Usage</span></span>
               <span className="badge badge-neutral" style={{ fontSize: 10 }}>CFO</span>
@@ -192,7 +192,7 @@ export default function ReportsPage() {
               {[
                 { label: `${fmtNum(totalSessions)} sessions captured`, href: '/sessions' },
                 { label: `${fmtNum(totalToolCalls)} tool calls recorded`, href: '/agents' },
-                { label: `${fmtTok(totalTokens)} tokens consumed`, href: '/models' },
+                { label: `${fmtTok(totalTokens)} tokens consumed`, href: '/tokenomics?tab=models' },
                 { label: `${errorRate}% tool error rate`, href: '/risk' },
               ].map(ev => (
                 <div key={ev.label} className="row between f12">
@@ -216,8 +216,8 @@ export default function ReportsPage() {
           { label: 'Sessions', value: fmtNum(totalSessions), detail: `median ${fmtDur(medDuration)}`, href: '/sessions', icon: <Terminal size={18} />, tone: 'accent' },
           { label: 'Messages', value: fmtNum(totalMessages), href: '/sessions', icon: <FileText size={18} />, tone: 'info' },
           { label: 'Tool calls', value: fmtNum(totalToolCalls), detail: `${errorRate}% errors`, href: '/agents', icon: <ShieldCheck size={18} />, tone: totalToolCalls > 0 ? 'pos' : 'neutral' },
-          { label: 'Tokens', value: fmtTok(totalTokens), detail: `${cacheHitRate}% cached`, href: '/models', icon: <BrainCircuit size={18} />, tone: 'info' },
-          { label: 'Models', value: String(distinctModels), href: '/models', icon: <BarChart3 size={18} />, tone: 'pos' },
+          { label: 'Tokens', value: fmtTok(totalTokens), detail: `${cacheHitRate}% cached`, href: '/tokenomics?tab=models', icon: <BrainCircuit size={18} />, tone: 'info' },
+          { label: 'Models', value: String(distinctModels), href: '/tokenomics?tab=models', icon: <BarChart3 size={18} />, tone: 'pos' },
           { label: 'Repositories', value: String(distinctRepos), href: '/repositories', icon: <Database size={18} />, tone: 'warn' },
           { label: 'Collections', value: fmtNum(collectionRunCount), href: '/collector', icon: <Clock size={18} />, tone: 'neutral' },
           { label: 'Agents', value: String(agentStats.length), detail: agentStats.map(a => a.agent).join(', '), href: '/agents', icon: <Users size={18} />, tone: 'accent' },
@@ -263,7 +263,7 @@ export default function ReportsPage() {
       {/* Quick links */}
       <div className="row gap-12">
         <Link href="/sessions" className="btn">Sessions</Link>
-        <Link href="/models" className="btn">Models</Link>
+        <Link href="/tokenomics?tab=models" className="btn">Models</Link>
         <Link href="/risk" className="btn">Risk</Link>
       </div>
     </div>

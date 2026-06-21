@@ -14,7 +14,7 @@ const ITEMS: NavItem[] = [
   { label: 'Insights', href: '/insights', detail: 'Verdicts: best agent, shipping efficiency' },
   { label: 'Sessions', href: '/sessions', detail: 'Captured agent sessions' },
   { label: 'Agents & Skills', href: '/agents', detail: 'Agent usage and tool matrix' },
-  { label: 'Models & Tokens', href: '/models', detail: 'Token usage and providers' },
+  { label: 'Tokenomics', href: '/tokenomics', detail: 'Tokens, cost, models and providers' },
   { label: 'Repositories & PRs', href: '/repositories', detail: 'Repository activity and pull-request evidence' },
   { label: 'Pull Requests', href: '/repositories', detail: 'PR evidence from git activity' },
   { label: 'Risk & Policy', href: '/risk', detail: 'Findings, risk signals, policy log' },
