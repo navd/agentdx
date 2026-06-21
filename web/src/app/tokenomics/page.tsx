@@ -241,7 +241,7 @@ function ModelsTab({ report: m }: { report: ModelsReport }) {
       )}
 
       <div className="card">
-        <Collapsible title="Model details" count={m.models.length}>
+        <Collapsible title="Model details" count={m.models.length} defaultOpen>
           <div className="table-wrap">
             <table className="tbl">
               <thead><tr><th>Model</th><th>Provider</th><th className="num">Sessions</th><th className="num">Input</th><th className="num">Output</th><th className="num">Cache</th><th className="num">Total</th><th className="num">Cache %</th><th className="num">Est. cost</th></tr></thead>
