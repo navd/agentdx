@@ -43,7 +43,7 @@ test.describe('Data consistency', () => {
     `).get() as any;
     db.close();
 
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const body = await page.textContent('body');
     const total = row.total || 0;
     if (total >= 1e9) {
@@ -113,7 +113,7 @@ test.describe('Data consistency', () => {
     const { cnt } = db.prepare("SELECT COUNT(DISTINCT model) as cnt FROM model_usage WHERE model != '<synthetic>'").get() as any;
     db.close();
 
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const body = await page.textContent('body');
     expect(body).toContain(String(cnt));
   });

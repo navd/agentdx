@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const ROUTES = [
-  '/', '/sessions', '/pull-requests', '/agents', '/models',
+  '/', '/sessions', '/pull-requests', '/agents', '/tokenomics',
   '/repositories', '/rules', '/risk', '/remote-control',
   '/reports', '/collector', '/settings',
 ];
@@ -63,6 +63,9 @@ test.describe('Structural crawl', () => {
 
 test.describe('Link integrity', () => {
   test('all internal links resolve to 200', async ({ page, request }) => {
+    // Crawls every link on every route then probes each — bump past the 30s
+    // default so a slow dev server doesn't dispose the request context mid-run.
+    test.setTimeout(90000);
     const visited = new Set<string>();
     for (const route of ROUTES) {
       await page.goto(route);

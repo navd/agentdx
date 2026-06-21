@@ -231,24 +231,24 @@ test.describe('Session detail page', () => {
 // ============================================================
 test.describe('Models & Tokens page', () => {
   test('loads and shows page title', async ({ page }) => {
-    await page.goto('/models');
-    await expect(page.locator('.page-title')).toContainText('Models');
+    await page.goto('/tokenomics?tab=models&period=all');
+    await expect(page.locator('.page-title')).toContainText('Tokenomics');
   });
 
   test('renders KPI stat cards', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const cards = page.locator('.card.stat');
     expect(await cards.count()).toBeGreaterThanOrEqual(4);
   });
 
   test('shows token composition bar', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     await expect(page.locator('text=Token composition')).toBeVisible();
-    await expect(page.locator('.tokbar').first()).toBeVisible();
+    await expect(page.locator('.tok-legend').first()).toBeVisible();
   });
 
   test('shows models table after expanding collapsible', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     // Table is inside a Collapsible -- expand it first
     const toggle = page.locator('.drill-toggle:has-text("Model details")');
     await toggle.click();
@@ -258,7 +258,7 @@ test.describe('Models & Tokens page', () => {
   });
 
   test('models table has tag-model badges after expanding', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const toggle = page.locator('.drill-toggle:has-text("Model details")');
     await toggle.click();
     await page.waitForTimeout(200);
@@ -267,7 +267,7 @@ test.describe('Models & Tokens page', () => {
   });
 
   test('shows gpt-5.5 from codex collection', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     // gpt-5.5 is in the collapsed Model details table -- expand it
     const toggle = page.locator('.drill-toggle:has-text("Model details")');
     await toggle.click();
@@ -277,9 +277,29 @@ test.describe('Models & Tokens page', () => {
   });
 
   test('does not show synthetic model', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const text = await page.locator('.page').textContent();
     expect(text).not.toContain('<synthetic>');
+  });
+});
+
+// ============================================================
+// Tokenomics — Cost tab
+// ============================================================
+test.describe('Tokenomics cost tab', () => {
+  test('cost tab shows spend by repository', async ({ page }) => {
+    await page.goto('/tokenomics?tab=cost&period=all');
+    await expect(page.locator('text=Spend by repository')).toBeVisible();
+  });
+
+  test('cost tab shows estimated spend KPI', async ({ page }) => {
+    await page.goto('/tokenomics?tab=cost&period=all');
+    await expect(page.locator('text=Estimated spend')).toBeVisible();
+  });
+
+  test('redirect from /finops lands on tokenomics cost tab', async ({ page }) => {
+    await page.goto('/finops');
+    await expect(page).toHaveURL(/\/tokenomics\?tab=cost/);
   });
 });
 
@@ -406,9 +426,9 @@ test.describe('Sidebar navigation', () => {
   });
 
   test('Models nav item is active on models page', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const activeNav = page.locator('.nav-item.active');
-    await expect(activeNav).toContainText('Models');
+    await expect(activeNav).toContainText('Tokenomics');
   });
 
   test('clicking Sessions nav navigates', async ({ page }) => {
@@ -492,7 +512,7 @@ test.describe('Design system', () => {
   test('no console errors on models page', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     await page.waitForTimeout(1000);
     const realErrors = errors.filter(e => !e.includes('hydration') && !e.includes('favicon') && !e.includes('Failed to load resource') && !e.includes('__import_unsupported'));
     expect(realErrors).toHaveLength(0);
@@ -732,20 +752,20 @@ test.describe('Reports page', () => {
 // ============================================================
 test.describe('Models enhanced features', () => {
   test('shows provider cards', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const text = await page.locator('.page').textContent();
-    expect(text).toContain('Connected');
+    expect(text).toMatch(/BYOK|Local/);
   });
 
   test('shows BYOK or Local mode badges', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const text = await page.locator('.page').textContent();
     expect(text).toMatch(/BYOK|Local/);
   });
 
   test('has tokbar elements', async ({ page }) => {
-    await page.goto('/models');
-    const tokbars = page.locator('.tokbar');
+    await page.goto('/tokenomics?tab=models&period=all');
+    const tokbars = page.locator('.tok-legend');
     expect(await tokbars.count()).toBeGreaterThanOrEqual(1);
   });
 });
@@ -853,7 +873,7 @@ test.describe('Agent x Skill matrix', () => {
 
 test.describe('Models mode badges', () => {
   test('shows mode badges on provider cards', async ({ page }) => {
-    await page.goto('/models');
+    await page.goto('/tokenomics?tab=models&period=all');
     const text = await page.locator('.page').textContent();
     expect(text).toMatch(/BYOK|Local/);
   });
@@ -1008,7 +1028,7 @@ test.describe('Command palette', () => {
     await page.evaluate(() => (window as any).__openCommandPalette?.());
     const input = page.getByRole('dialog', { name: 'Command palette' }).locator('input');
     await input.fill('risk');
-    await expect(page.getByRole('dialog', { name: 'Command palette' }).getByText('Risk & Quality')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Command palette' }).getByText('Risk & Policy').first()).toBeVisible();
   });
 
   test('palette closes on Escape', async ({ page }) => {

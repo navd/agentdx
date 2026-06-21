@@ -5,7 +5,7 @@ const ROUTES = [
   '/sessions',
   '/pull-requests',
   '/agents',
-  '/models',
+  '/tokenomics',
   '/repositories',
   '/rules',
   '/risk',
@@ -180,6 +180,6 @@ test.describe('Command palette', () => {
     // Use keyboard Enter to navigate to the first result
     await input.press('Enter');
     await page.waitForTimeout(500);
-    expect(page.url()).toContain('/models');
+    expect(page.url()).toContain('/tokenomics');
   });
 });
