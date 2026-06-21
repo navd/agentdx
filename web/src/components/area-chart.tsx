@@ -9,12 +9,13 @@ export interface AreaSeries {
   data: number[];
 }
 
-export function AreaChart({ series, labels, height = 180, stacked = true, hrefTemplate }: {
+export function AreaChart({ series, labels, height = 180, stacked = true, hrefTemplate, xLabel = 'week starting' }: {
   series: AreaSeries[];
   labels: string[];
   height?: number;
   stacked?: boolean;
   hrefTemplate?: string;
+  xLabel?: string;
 }) {
   const [hoveredCol, setHoveredCol] = useState<number | null>(null);
   const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null);
@@ -137,7 +138,7 @@ export function AreaChart({ series, labels, height = 180, stacked = true, hrefTe
             >{label}</text>
           ) : null
         ))}
-        <text x={padL + plotW / 2} y={height - 3} textAnchor="middle" fontSize={9} fill="var(--text-subtle)">week starting</text>
+        <text x={padL + plotW / 2} y={height - 3} textAnchor="middle" fontSize={9} fill="var(--text-subtle)">{xLabel}</text>
         {labels.map((_, i) => {
           const colW = plotW / n;
           return (

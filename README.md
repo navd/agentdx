@@ -97,6 +97,9 @@ Shown with `npx @agentdx/agentdx`; once installed globally, just use `agentdx`.
 | `agentdx collect` | Collect session data only (no dashboard) |
 | `agentdx serve` | Start the dashboard only (no collection) |
 | `agentdx watch` | Collect, serve, and re-collect on an interval (default: 5 min) |
+| `agentdx finops` | Cross-agent cost report — spend by repo / model / agent / day (`--period`, `--by`, `--json`, `--csv`) |
+| `agentdx check` | Agent diff for a commit range — AI/human split, cost, risk surface (`--base`, `--head`, `--format text\|markdown\|json\|sarif`). Non-blocking. See [docs/ci](docs/ci/) |
+| `agentdx statusline` | One-line baseline meter for a repo; pipe Claude Code's statusLine JSON on stdin |
 | `agentdx status` | Show database stats: sessions, messages, tool calls, tokens, models |
 | `agentdx import <file>` | Import sessions from a portable JSONL export |
 

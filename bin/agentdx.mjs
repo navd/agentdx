@@ -634,6 +634,161 @@ program
   });
 
 program
+  .command('check')
+  .description('Agent diff for a commit range — AI/human split, cost, risk (non-blocking)')
+  .option('--db <path>', 'Path to SQLite database')
+  .option('--base <ref>', 'Base ref', 'origin/main')
+  .option('--head <ref>', 'Head ref', 'HEAD')
+  .option('--format <fmt>', 'text | markdown | json | sarif', 'text')
+  .option('--out <path>', 'Write to a file instead of stdout')
+  .option('--config <path>', 'Path to .agentdx.json (default: <repo>/.agentdx.json)')
+  .action(async (opts) => {
+    const chalk = (await import('chalk')).default;
+    const p = paint(chalk);
+    const Database = (await import('better-sqlite3')).default;
+    const dbPath = opts.db || defaultDbPath();
+
+    if (!existsSync(dbPath)) { console.log(chalk.yellow('\n  No database found. Run `agentdx collect` first.\n')); return; }
+
+    let repoPath;
+    try { repoPath = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim(); }
+    catch { console.log(chalk.yellow('  Not a git repository.')); return; }
+
+    const g = (args) => { try { return execSync(`git ${args}`, { cwd: repoPath, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+    // Resolve base: fall back when the requested ref (e.g. origin/main) is absent.
+    let base = opts.base;
+    if (!g(`rev-parse --verify --quiet ${base}`)) {
+      base = g('rev-parse --verify --quiet main') ? 'main' : (g('rev-parse --verify --quiet HEAD~1') ? 'HEAD~1' : '');
+    }
+    const head = opts.head;
+    const shas = base ? g(`rev-list ${base}..${head}`).split('\n').filter(Boolean) : [];
+    const changedFiles = base ? g(`diff --name-only ${base}...${head}`).split('\n').filter(Boolean) : [];
+
+    let raw = {};
+    const cfgPath = opts.config || join(repoPath, '.agentdx.json');
+    if (existsSync(cfgPath)) { try { raw = JSON.parse(readFileSync(cfgPath, 'utf8')); } catch { /* ignore malformed config */ } }
+    const cfg = {
+      maxSessionCostUsd: raw.max_session_cost ?? raw.maxSessionCostUsd,
+      maxToolErrorRate: raw.max_tool_error_rate ?? raw.maxToolErrorRate,
+      blockIfRiskFlag: raw.block_if_risk_flag ?? raw.blockIfRiskFlag,
+      maxAiPct: raw.max_ai_pct ?? raw.maxAiPct,
+    };
+
+    const { buildAgentDiff, toMarkdown, toSarif } = await import('../dist/src/core/check.js');
+    const db = new Database(dbPath, { readonly: true });
+    let diff;
+    try { diff = buildAgentDiff(db, { repoPath, base: base || '(none)', head, shas, changedFiles, config: cfg }); }
+    finally { db.close(); }
+
+    let output;
+    if (opts.format === 'json') output = JSON.stringify(diff, null, 2);
+    else if (opts.format === 'markdown') output = toMarkdown(diff);
+    else if (opts.format === 'sarif') output = toSarif(diff);
+    else output = renderCheckText(p, diff);
+
+    if (opts.out) { writeFileSync(opts.out, output + '\n'); console.log(p.green(`  ✓ wrote ${opts.out}`)); }
+    else console.log(output);
+    process.exitCode = 0; // P0: always non-blocking
+  });
+
+program
+  .command('statusline')
+  .description('One-line baseline meter for a repo (pipe Claude Code statusLine JSON on stdin)')
+  .option('--db <path>', 'Path to SQLite database')
+  .option('--repo <path>', 'Repo path (default: stdin workspace dir, else cwd)')
+  .option('--json', 'Emit JSON instead of a status line')
+  .action(async (opts) => {
+    const Database = (await import('better-sqlite3')).default;
+    const dbPath = opts.db || defaultDbPath();
+    const input = await readStdinJson();
+    const repo = opts.repo || input?.workspace?.current_dir || input?.cwd || process.cwd();
+
+    // Never break a host status bar: on any miss, emit a minimal line and exit 0.
+    if (!existsSync(dbPath)) { console.log(''); return; }
+
+    const { repoBaseline } = await import('../dist/src/core/baseline.js');
+    const db = new Database(dbPath, { readonly: true });
+    let base;
+    try { base = repoBaseline(db, repo); } finally { db.close(); }
+
+    const chalk = (await import('chalk')).default;
+    const model = input?.model?.display_name || input?.model?.id || '';
+    const curCost = typeof input?.cost?.total_cost_usd === 'number' ? input.cost.total_cost_usd : null;
+    const name = repo.split('/').filter(Boolean).slice(-1)[0] || repo;
+
+    if (opts.json) {
+      const ratio = base && curCost != null && base.medianCostUsd > 0 ? curCost / base.medianCostUsd : null;
+      console.log(JSON.stringify({ repo, model, currentCostUsd: curCost, baseline: base, ratio }));
+      return;
+    }
+
+    const fmtMoney = (n) => (n < 0.01 ? '<$0.01' : '$' + n.toFixed(2));
+    // Live mode: Claude Code piped the current session cost → show the meter.
+    if (curCost != null && base && base.medianCostUsd > 0) {
+      const ratio = curCost / base.medianCostUsd;
+      const dot = ratio >= 2 ? chalk.red('●') : ratio >= 1.1 ? chalk.yellow('●') : chalk.green('●');
+      const rtxt = ratio >= 1.1 ? `${ratio.toFixed(1)}× median` : 'on track';
+      const parts = [model && chalk.dim(model), chalk.bold(fmtMoney(curCost)), `${dot} ${rtxt}`, chalk.dim(name)].filter(Boolean);
+      console.log(parts.join(chalk.dim(' · ')));
+      return;
+    }
+    // Informational mode (manual run / no live cost): show the repo baseline.
+    if (base) {
+      console.log([chalk.dim(name), `med ${fmtMoney(base.medianCostUsd)} · ${fmtTok(base.medianTokens)} tok`, chalk.dim(`${base.sessions} sessions`)].join(chalk.dim(' · ')));
+      return;
+    }
+    console.log(model ? chalk.dim(`${model} · ${name} (no baseline yet)`) : '');
+  });
+
+program
+  .command('finops')
+  .description('Cross-agent AI cost report — what each repo / model / agent cost')
+  .option('--db <path>', 'Path to SQLite database')
+  .option('--period <p>', 'Window: 30d, 90d, qtd, ytd, month=YYYY-MM, all', '30d')
+  .option('--by <dim>', 'Group rows by: repo, model, agent, day', 'repo')
+  .option('--json', 'Emit raw JSON')
+  .option('--csv <path>', 'Write a finance-importable CSV')
+  .action(async (opts) => {
+    const chalk = (await import('chalk')).default;
+    const p = paint(chalk);
+    const Database = (await import('better-sqlite3')).default;
+    const dbPath = opts.db || defaultDbPath();
+
+    if (!existsSync(dbPath)) {
+      console.log(chalk.yellow('\n  No database found. Run `agentdx collect` first.\n'));
+      return;
+    }
+
+    const { buildFinopsReport } = await import('../dist/src/core/finops.js');
+    const { fmtUsd } = await import('../dist/src/core/pricing.js');
+    const db = new Database(dbPath, { readonly: true });
+    let report;
+    try { report = buildFinopsReport(db, opts.period); } finally { db.close(); }
+
+    if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
+
+    const dim = ['repo', 'model', 'agent', 'day'].includes(opts.by) ? opts.by : 'repo';
+    const rows = dim === 'day'
+      ? report.daily.map((d) => ({ key: d.day, label: d.day, sessions: null, tokens: d.tokens, costUsd: d.costUsd, hasUnpriced: false, local: false }))
+      : dim === 'model' ? report.byModel : dim === 'agent' ? report.byAgent : report.byRepo;
+
+    if (opts.csv) { writeFinopsCsv(opts.csv, report); console.log(p.green(`\n  ✓ wrote ${opts.csv}`)); }
+
+    const t = report.totals;
+    console.log();
+    console.log('  ' + p.bold('AgentDX FinOps') + p.dim(`  ·  ${labelPeriod(report.period)}`));
+    console.log('  ' + p.dim('─'.repeat(INNER)));
+    console.log('  ' + p.bold(p.green(fmtUsd(t.costUsd))) + p.dim(`  ·  ${fmtTok(t.tokens)} tokens  ·  ${t.sessions} sessions  ·  ${t.repos} repos  ·  ${t.models} models`));
+    if (t.hasUnpriced) console.log('  ' + p.yellow('~ some models unpriced — cost shown is a floor'));
+    console.log();
+    console.log('  ' + p.dim(`by ${dim}`));
+    printFinopsTable(p, dim, rows, fmtUsd);
+    console.log();
+    console.log('  ' + p.dim('Estimated at API list prices. Flat-rate plans (Claude Max / Cursor pooled) have no per-request truth.'));
+    console.log();
+  });
+
+program
   .command('status')
   .description('Show collection stats')
   .option('--db <path>', 'Path to SQLite database')
@@ -755,6 +910,94 @@ function fmtTok(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return Math.round(n / 1e3) + 'K';
   return String(n);
+}
+
+function renderCheckText(p, d) {
+  const usd = (n) => (n < 0.01 ? '<$0.01' : '$' + n.toFixed(2));
+  const L = [''];
+  L.push('  ' + p.bold('AgentDX agent diff') + p.dim(`  ·  ${d.base}..${d.head}`));
+  L.push('  ' + p.dim('─'.repeat(INNER)));
+  if (!d.commits.matched) {
+    L.push('  ' + p.dim(`No agent sessions correlated to ${d.rangeCommits} commit(s) in range.`));
+    L.push('');
+    return L.join('\n');
+  }
+  const conf = (d.commits.meanConfidence * 100).toFixed(0);
+  L.push('  ' + p.bold(p.green(d.lines.ai.toLocaleString() + ' AI')) + p.dim(` / ${d.lines.human.toLocaleString()} human lines · ${d.lines.aiPct.toFixed(0)}% AI (conf ${conf}%)`));
+  L.push('  ' + p.bold(usd(d.cost.usd)) + p.dim(`${d.cost.hasUnpriced ? ' (floor)' : ''} · ${d.cost.sessions} sessions · ${d.tools.calls} tools · ${(d.tools.errorRate * 100).toFixed(0)}% err`));
+  L.push('  ' + p.dim(`${d.commits.correlated}/${d.rangeCommits} commits correlated`));
+  if (d.riskFiles.length) {
+    L.push('', '  ' + p.yellow('⚠ risk surface:'));
+    for (const r of d.riskFiles.slice(0, 10)) L.push('    ' + p.dim(`${r.file} — ${r.flags.join(', ')}`));
+  }
+  if (d.neverReviewed.length) {
+    L.push('', '  ' + p.yellow(`👁 never reviewed (${d.neverReviewed.length}):`));
+    for (const r of d.neverReviewed.slice(0, 10)) L.push('    ' + p.dim(`${r.file} — ${r.aiLines} AI lines`));
+  }
+  if (d.warnings.length) {
+    L.push('');
+    for (const w of d.warnings) L.push('  ' + p.yellow('⚠ ' + w));
+  }
+  L.push('');
+  return L.join('\n');
+}
+
+// Read a JSON blob piped on stdin (e.g. Claude Code's statusLine payload).
+// Returns null in a TTY or on empty/invalid input — never throws.
+async function readStdinJson() {
+  if (process.stdin.isTTY) return null;
+  try {
+    const chunks = [];
+    for await (const c of process.stdin) chunks.push(c);
+    const s = Buffer.concat(chunks).toString('utf8').trim();
+    return s ? JSON.parse(s) : null;
+  } catch { return null; }
+}
+
+function labelPeriod(period) {
+  if (period === '30d') return 'last 30 days';
+  if (period === '90d') return 'last 90 days';
+  if (period === 'qtd') return 'quarter to date';
+  if (period === 'ytd') return 'year to date';
+  if (period === 'all') return 'all time';
+  const m = /^month=(\d{4}-\d{2})$/.exec(period);
+  if (m) return m[1];
+  return period;
+}
+
+function shortRepo(pth) {
+  if (!pth || pth === '(unknown)') return '(unknown)';
+  const parts = String(pth).split('/').filter(Boolean);
+  return parts.slice(-2).join('/');
+}
+
+function printFinopsTable(p, dim, rows, fmtUsd) {
+  if (!rows.length) { console.log('  ' + p.dim('no usage in this period')); return; }
+  const labelOf = (r) => (dim === 'repo' ? shortRepo(r.label) : String(r.label));
+  const nameW = Math.min(38, Math.max(8, ...rows.map((r) => labelOf(r).length)));
+  rows.slice(0, 40).forEach((r, i) => {
+    const name = labelOf(r).slice(0, nameW).padEnd(nameW);
+    const rawCost = r.local ? '$0 local' : (r.hasUnpriced ? '~' : '') + fmtUsd(r.costUsd);
+    const cost = rawCost.padStart(10);
+    const colored = r.local ? p.dim(cost) : r.hasUnpriced ? p.yellow(cost) : p.green(cost);
+    const tok = p.dim(fmtTok(r.tokens).padStart(8));
+    const sess = r.sessions == null ? '' : p.dim(String(r.sessions).padStart(5));
+    console.log('  ' + p.dim(String(i + 1).padStart(2)) + '  ' + name + '  ' + colored + '  ' + tok + (sess ? '  ' + sess : ''));
+  });
+  if (rows.length > 40) console.log('  ' + p.dim(`… +${rows.length - 40} more`));
+}
+
+function writeFinopsCsv(path, report) {
+  const esc = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = ['dimension,key,input,output,cache_read,cache_write,tokens,sessions,cost_usd,has_unpriced,local'];
+  const push = (dim, r) => lines.push([dim, r.label, r.input, r.output, r.cacheRead, r.cacheWrite, r.tokens, r.sessions, (r.costUsd ?? 0).toFixed(4), r.hasUnpriced ? 1 : 0, r.local ? 1 : 0].map(esc).join(','));
+  report.byRepo.forEach((r) => push('repo', r));
+  report.byModel.forEach((r) => push('model', r));
+  report.byAgent.forEach((r) => push('agent', r));
+  writeFileSync(path, lines.join('\n') + '\n');
 }
 
 program.parse();

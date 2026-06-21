@@ -1,4 +1,3 @@
-// GENERATED from src/core/pricing.ts by scripts/sync-shared.mjs — do not edit.
 // Estimated API cost for recorded token usage — "what this would have cost at
 // public pay-as-you-go API list prices". Pure module (no DB import), safe in
 // client components.

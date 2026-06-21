@@ -45,13 +45,22 @@
     "web/postcss.config.*"
   ],
   "type": "module",
+  "main": "./dist/src/core/index.js",
+  "types": "./dist/src/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/core/index.d.ts",
+      "default": "./dist/src/core/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "agentdx": "./bin/agentdx.mjs"
   },
   "scripts": {
-    "prebuild": "tsc && cp src/core/schema.sql dist/src/core/schema.sql",
-    "build": "tsc && cp src/core/schema.sql dist/src/core/schema.sql && cd web && npm run build",
-    "prepublishOnly": "tsc && cp src/core/schema.sql dist/src/core/schema.sql",
+    "prebuild": "tsc && cp src/core/schema.sql dist/src/core/schema.sql && node scripts/sync-shared.mjs",
+    "build": "tsc && cp src/core/schema.sql dist/src/core/schema.sql && node scripts/sync-shared.mjs && cd web && npm run build",
+    "prepublishOnly": "tsc && cp src/core/schema.sql dist/src/core/schema.sql && node scripts/sync-shared.mjs",
     "postinstall": "node bin/postinstall.mjs",
     "collect": "node --loader ts-node/esm src/collector/index.ts",
     "serve": "cd web && npm run dev",

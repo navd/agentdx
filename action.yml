@@ -1,0 +1,57 @@
+name: 'AgentDX agent diff'
+description: 'Post an AI-agent diff (AI/human line split, cost, tool-error rate, risk surface) on a PR. Non-blocking.'
+branding:
+  icon: 'activity'
+  color: 'green'
+
+inputs:
+  base:
+    description: 'Base ref for the diff range'
+    default: ${{ github.event.pull_request.base.sha }}
+  head:
+    description: 'Head ref for the diff range'
+    default: ${{ github.event.pull_request.head.sha }}
+  db:
+    description: >-
+      Path to an agentdx.db made available on the runner. Agent telemetry lives
+      on developer machines, so CI must provide the DB (cache/artifact/self-host
+      runner). Without it the action is a graceful no-op. Full cross-machine
+      support is on the AgentDX roadmap (team rollup).
+    default: ''
+  upload-sarif:
+    description: 'Upload SARIF so AI hotspots show in code scanning'
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Run agentdx check
+      shell: bash
+      run: |
+        ARGS=(check --base "${{ inputs.base }}" --head "${{ inputs.head }}")
+        if [ -n "${{ inputs.db }}" ]; then ARGS+=(--db "${{ inputs.db }}"); fi
+        npx -y @agentdx/agentdx@latest "${ARGS[@]}" --format markdown --out agentdx-comment.md || true
+        npx -y @agentdx/agentdx@latest "${ARGS[@]}" --format sarif --out agentdx.sarif || true
+
+    - name: Post sticky PR comment
+      if: hashFiles('agentdx-comment.md') != ''
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const body = fs.readFileSync('agentdx-comment.md', 'utf8');
+          const issue = context.issue.number;
+          if (!issue) return;
+          const { owner, repo } = context.repo;
+          const marker = '<!-- agentdx -->';
+          const full = body + '\n' + marker;
+          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: issue });
+          const mine = comments.find((c) => c.body && c.body.includes(marker));
+          if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: full });
+          else await github.rest.issues.createComment({ owner, repo, issue_number: issue, body: full });
+
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true' && hashFiles('agentdx.sarif') != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: agentdx.sarif
